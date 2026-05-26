@@ -14,8 +14,9 @@ def test_home_page_loads() -> None:
     response = client.get("/")
 
     assert response.status_code == 200
-    assert b"Smart System A Agent" in response.data
+    assert b"Gold Smart Agent" in response.data
     assert b"Run Analysis" in response.data
+    assert b"Risk Settings" not in response.data
 
 
 def test_image_upload_returns_image_intake_no_setup() -> None:
@@ -35,20 +36,18 @@ def test_image_upload_returns_image_intake_no_setup() -> None:
 
 
 def test_dashboard_sections_render_for_csv_upload() -> None:
-    def csv_bytes(data) -> BytesIO:
-        text = "timestamp,open,high,low,close,volume\n"
-        for c in data.candles:
-            text += f"{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+    def csv_bytes() -> BytesIO:
+        text = "timeframe,timestamp,open,high,low,close,volume\n"
+        for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+            for c in data.candles:
+                text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
         return BytesIO(text.encode("utf-8"))
 
     client = app.test_client()
     response = client.post(
         "/",
         data={
-            "h4": (csv_bytes(_bullish_h4()), "h4.csv"),
-            "h1": (csv_bytes(_bullish_h1()), "h1.csv"),
-            "balance": "100000",
-            "risk_mode": "standard",
+            "ohlc_data": (csv_bytes(), "ohlc.csv"),
             "symbol": "XAU/USD",
             "data_source": "csv",
         },
@@ -62,10 +61,17 @@ def test_dashboard_sections_render_for_csv_upload() -> None:
 
 
 def test_upas_selector_renders_upas_dashboard() -> None:
-    def csv_bytes(data) -> BytesIO:
-        text = "timestamp,open,high,low,close,volume\n"
-        for c in data.candles:
-            text += f"{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+    def csv_bytes() -> BytesIO:
+        text = "timeframe,timestamp,open,high,low,close,volume\n"
+        for timeframe, data in [
+            ("MN1", trend_data("MN1")),
+            ("W1", trend_data("W1")),
+            ("D1", trend_data("D1")),
+            ("H4", h4_last_kiss()),
+            ("H1", h1_confirmation()),
+        ]:
+            for c in data.candles:
+                text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
         return BytesIO(text.encode("utf-8"))
 
     client = app.test_client()
@@ -74,12 +80,7 @@ def test_upas_selector_renders_upas_dashboard() -> None:
         data={
             "analysis_system": "upas",
             "data_source": "csv",
-            "mn1": (csv_bytes(trend_data("MN1")), "mn1.csv"),
-            "w1": (csv_bytes(trend_data("W1")), "w1.csv"),
-            "d1": (csv_bytes(trend_data("D1")), "d1.csv"),
-            "h4": (csv_bytes(h4_last_kiss()), "h4.csv"),
-            "h1": (csv_bytes(h1_confirmation()), "h1.csv"),
-            "balance": "100000",
+            "ohlc_data": (csv_bytes(), "ohlc.csv"),
             "symbol": "XAUUSD",
         },
         content_type="multipart/form-data",

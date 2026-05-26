@@ -21,14 +21,17 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## CSV Format
+## OHLC CSV Format
 
-CSV files must contain:
+The web platform uses one combined OHLC CSV file. It must contain:
 
 ```csv
-timestamp,open,high,low,close,volume
-2026-01-01 00:00,4100,4110,4095,4108,1200
+timeframe,timestamp,open,high,low,close,volume
+H4,2026-01-01 00:00,4100,4110,4095,4108,1200
+H1,2026-01-01 01:00,4108,4112,4101,4105,950
 ```
+
+Smart System A requires `H4` and `H1` rows. UPAS requires `MN1`, `W1`, `D1`, `H4`, and `H1` rows.
 
 If volume is missing, the agent reports `Volume analysis limited - OHLCV volume data missing.` Condition 6 does not automatically pass unless `--volume-override` is explicitly provided.
 
@@ -56,7 +59,7 @@ Then open:
 http://127.0.0.1:8000
 ```
 
-The web platform lets you upload H4 and H1 CSV files, choose account balance and risk mode, and receive the same strict SSA valid setup or no-setup output as the CLI.
+The web platform lets you upload one combined OHLC CSV file or use the live feed, then receive the same strict setup or no-setup output.
 
 The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
 
@@ -69,7 +72,7 @@ The web platform supports two selectable analysis systems:
 - **Smart System A**: H4/H1 XAUUSD analysis with SSA wave, BOS, pullback, volume, and risk rules.
 - **UPAS Trade Assistant**: pure price-action XAUUSD analysis using MN1, W1, D1, H4, and H1. UPAS detects Kangaroo Tail, Last Kiss, Moolah, and Engulfing Trap Bar setups and returns JSON first, then a short summary.
 
-CSV mode for UPAS requires MN1, W1, D1, H4, and H1 files. Live mode fetches all five timeframes when `TWELVE_DATA_API_KEY` is configured.
+CSV mode for UPAS requires one OHLC file containing MN1, W1, D1, H4, and H1 rows. Live mode fetches all five timeframes when `TWELVE_DATA_API_KEY` is configured.
 
 ## Live XAUUSD Feed
 

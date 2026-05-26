@@ -23,30 +23,32 @@ PAGE = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Smart System A Agent</title>
+  <title>Gold Smart Agent</title>
   <style>
     :root {
-      color-scheme: light;
-      --ink: #18202a;
-      --muted: #5b6470;
-      --line: #d7dde5;
-      --panel: #f7f8fa;
-      --accent: #0f766e;
-      --danger: #b42318;
-      --ok: #12643f;
-      --paper: #ffffff;
+      color-scheme: dark;
+      --ink: #f5f7fb;
+      --muted: #9aa5b5;
+      --line: #253244;
+      --panel: #111827;
+      --accent: #d4af37;
+      --accent-ink: #15120a;
+      --danger: #ff8a80;
+      --ok: #76e4a6;
+      --paper: #0b1220;
+      --shell: #070b12;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--ink);
-      background: #eef2f5;
+      background: radial-gradient(circle at top left, #1d2636 0, #070b12 34%, #05070c 100%);
     }
     header {
       background: var(--paper);
       border-bottom: 1px solid var(--line);
-      padding: 18px 28px;
+      padding: 22px 30px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -54,14 +56,14 @@ PAGE = """
     }
     h1 {
       margin: 0;
-      font-size: 22px;
+      font-size: 24px;
       letter-spacing: 0;
     }
     .badge {
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 6px 10px;
-      color: var(--muted);
+      color: var(--accent);
       font-size: 13px;
       white-space: nowrap;
     }
@@ -96,7 +98,7 @@ PAGE = """
       border-radius: 6px;
       padding: 10px 11px;
       font-size: 14px;
-      background: var(--paper);
+      background: #0f1726;
       color: var(--ink);
     }
     input[type="checkbox"] {
@@ -115,7 +117,7 @@ PAGE = """
       border-radius: 6px;
       padding: 12px 14px;
       background: var(--accent);
-      color: white;
+      color: var(--accent-ink);
       font-weight: 700;
       cursor: pointer;
     }
@@ -130,6 +132,7 @@ PAGE = """
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 20px;
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
     }
     .status {
       font-weight: 700;
@@ -165,6 +168,36 @@ PAGE = """
       font-size: 13px;
     }
     .muted { color: var(--muted); }
+    .field-help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      margin-left: 6px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--accent);
+      font-size: 12px;
+      cursor: help;
+      position: relative;
+    }
+    .field-help:hover::after,
+    .field-help:focus::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 24px;
+      top: -8px;
+      z-index: 10;
+      width: 310px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #111827;
+      color: var(--ink);
+      line-height: 1.45;
+      box-shadow: 0 14px 35px rgba(0, 0, 0, 0.35);
+    }
     .dashboard {
       display: grid;
       gap: 14px;
@@ -238,7 +271,7 @@ PAGE = """
 </head>
 <body>
   <header>
-    <h1>Smart System A Agent</h1>
+    <h1>Gold Smart Agent</h1>
     <div class="badge">XAUUSD rule-based analysis only</div>
   </header>
   <main>
@@ -255,36 +288,10 @@ PAGE = """
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
           <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
         </select>
-        <label for="mn1">MN1 CSV</label>
-        <input id="mn1" name="mn1" type="file" accept=".csv">
-        <label for="w1">W1 CSV</label>
-        <input id="w1" name="w1" type="file" accept=".csv">
-        <label for="d1">D1 CSV</label>
-        <input id="d1" name="d1" type="file" accept=".csv">
-        <label for="h4">H4 CSV</label>
-        <input id="h4" name="h4" type="file" accept=".csv">
-        <label for="h1">H1 CSV</label>
-        <input id="h1" name="h1" type="file" accept=".csv">
+        <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. For Smart System A include H4 and H1 rows. For UPAS include MN1, W1, D1, H4, and H1 rows. Volume may be blank, but volume-based rules may fail.">!</span></label>
+        <input id="ohlc_data" name="ohlc_data" type="file" accept=".csv">
         <label for="chart_image">Chart Screenshot</label>
         <input id="chart_image" name="chart_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
-      </fieldset>
-      <fieldset>
-        <legend>Risk Settings</legend>
-        <label for="balance">Account Balance</label>
-        <input id="balance" name="balance" type="number" min="1" step="0.01" value="{{ form.balance }}" required>
-        <label for="risk_mode">Risk Mode</label>
-        <select id="risk_mode" name="risk_mode">
-          <option value="standard" {% if form.risk_mode == "standard" %}selected{% endif %}>Standard</option>
-          <option value="high_confidence" {% if form.risk_mode == "high_confidence" %}selected{% endif %}>High Confidence</option>
-        </select>
-        <label for="risk_percent">Risk Percent</label>
-        <input id="risk_percent" name="risk_percent" type="number" min="0.01" max="1.5" step="0.01" value="{{ form.risk_percent }}">
-        <label for="symbol">Symbol</label>
-        <input id="symbol" name="symbol" value="{{ form.symbol }}">
-        <label class="checkline" for="volume_override">
-          <input id="volume_override" name="volume_override" type="checkbox" {% if form.volume_override %}checked{% endif %}>
-          Allow volume override
-        </label>
       </fieldset>
       <button type="submit">Run Analysis</button>
     </form>
@@ -431,8 +438,8 @@ PAGE = """
         </div>
       {% else %}
         <div class="panel">
-          <strong>Choose Smart System A or UPAS, then select CSV upload or live XAUUSD feed.</strong>
-          <p class="muted">SSA uses H4/H1. UPAS uses MN1, W1, D1, H4, and H1. Screenshots are accepted for intake only.</p>
+          <strong>Choose an analysis system, then upload one OHLC CSV or use the live XAUUSD feed.</strong>
+          <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Screenshots are accepted for intake only.</p>
         </div>
       {% endif %}
     </section>
@@ -468,17 +475,9 @@ def index():
 
     if request.method == "POST":
         try:
-            mn1_file = request.files.get("mn1")
-            w1_file = request.files.get("w1")
-            d1_file = request.files.get("d1")
-            h4_file = request.files.get("h4")
-            h1_file = request.files.get("h1")
+            ohlc_file = request.files.get("ohlc_data")
             chart_image = request.files.get("chart_image")
-            has_mn1 = bool(mn1_file and mn1_file.filename)
-            has_w1 = bool(w1_file and w1_file.filename)
-            has_d1 = bool(d1_file and d1_file.filename)
-            has_h4 = bool(h4_file and h4_file.filename)
-            has_h1 = bool(h1_file and h1_file.filename)
+            has_ohlc = bool(ohlc_file and ohlc_file.filename)
             has_image = bool(chart_image and chart_image.filename)
 
             risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
@@ -491,18 +490,22 @@ def index():
             if form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
-                elif has_mn1 and has_w1 and has_d1 and has_h4 and has_h1:
+                elif has_ohlc:
                     loader = DataLoader()
-                    mn1_data = loader.load_csv_stream(TextIOWrapper(mn1_file.stream, encoding="utf-8"), "MN1", form["symbol"])
-                    w1_data = loader.load_csv_stream(TextIOWrapper(w1_file.stream, encoding="utf-8"), "W1", form["symbol"])
-                    d1_data = loader.load_csv_stream(TextIOWrapper(d1_file.stream, encoding="utf-8"), "D1", form["symbol"])
-                    h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
-                    h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
+                    multi = loader.load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
+                    missing = [tf for tf in ["MN1", "W1", "D1", "H4", "H1"] if tf not in multi]
+                    if missing:
+                        raise ValueError(f"UPAS OHLC data missing timeframe rows: {', '.join(missing)}")
+                    mn1_data = multi["MN1"]
+                    w1_data = multi["W1"]
+                    d1_data = multi["D1"]
+                    h4_data = multi["H4"]
+                    h1_data = multi["H1"]
                 elif has_image:
                     image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
                     mn1_data = w1_data = d1_data = h4_data = h1_data = None
                 else:
-                    error = "UPAS requires MN1, W1, D1, H4, and H1 CSV files, or live data mode."
+                    error = "UPAS requires one OHLC CSV containing MN1, W1, D1, H4, and H1 rows, or live data mode."
                     mn1_data = w1_data = d1_data = h4_data = h1_data = None
 
                 if all([mn1_data, w1_data, d1_data, h4_data, h1_data]):
@@ -527,10 +530,14 @@ def index():
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
-            elif has_h4 and has_h1:
+            elif has_ohlc:
                 loader = DataLoader()
-                h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
-                h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
+                multi = loader.load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
+                missing = [tf for tf in ["H4", "H1"] if tf not in multi]
+                if missing:
+                    raise ValueError(f"Smart System A OHLC data missing timeframe rows: {', '.join(missing)}")
+                h4_data = multi["H4"]
+                h1_data = multi["H1"]
                 agent = SmartSystemAAgent()
                 snapshot = agent.analyze_with_snapshot(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
                 result = snapshot.result
@@ -542,7 +549,7 @@ def index():
             elif has_image:
                 image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
             else:
-                error = "Upload both H4 and H1 CSV files, or upload a chart screenshot for image intake."
+                error = "Upload one OHLC CSV file, use live data mode, or upload a chart screenshot for image intake."
         except Exception as exc:
             error = str(exc)
 
