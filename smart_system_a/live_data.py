@@ -64,7 +64,14 @@ class TwelveDataClient:
                 )
             )
 
-        timeframe = "H4" if interval == "4h" else "H1" if interval == "1h" else interval
+        timeframe_map = {
+            "1month": "MN1",
+            "1week": "W1",
+            "1day": "D1",
+            "4h": "H4",
+            "1h": "H1",
+        }
+        timeframe = timeframe_map.get(interval, interval)
         return OHLCVData(candles=candles, timeframe=timeframe, symbol=symbol)
 
 
@@ -76,3 +83,11 @@ class LiveXAUUSDFeed:
         h4 = self.client.fetch_ohlcv(symbol, "4h", outputsize)
         h1 = self.client.fetch_ohlcv(symbol, "1h", outputsize)
         return h4, h1
+
+    def fetch_upas(self, symbol: str = "XAU/USD", outputsize: int = 80) -> tuple[OHLCVData, OHLCVData, OHLCVData, OHLCVData, OHLCVData]:
+        mn1 = self.client.fetch_ohlcv(symbol, "1month", outputsize)
+        w1 = self.client.fetch_ohlcv(symbol, "1week", outputsize)
+        d1 = self.client.fetch_ohlcv(symbol, "1day", outputsize)
+        h4 = self.client.fetch_ohlcv(symbol, "4h", outputsize)
+        h1 = self.client.fetch_ohlcv(symbol, "1h", outputsize)
+        return mn1, w1, d1, h4, h1

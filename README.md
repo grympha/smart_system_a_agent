@@ -62,6 +62,15 @@ The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A
 
 Analysis results are shown in a dashboard with separate sections for H4 trend and wave context, H1 structure and entry behavior, the six-condition SSA checklist, risk metrics, and the exact final SSA output.
 
+## Analysis Systems
+
+The web platform supports two selectable analysis systems:
+
+- **Smart System A**: H4/H1 XAUUSD analysis with SSA wave, BOS, pullback, volume, and risk rules.
+- **UPAS Trade Assistant**: pure price-action XAUUSD analysis using MN1, W1, D1, H4, and H1. UPAS detects Kangaroo Tail, Last Kiss, Moolah, and Engulfing Trap Bar setups and returns JSON first, then a short summary.
+
+CSV mode for UPAS requires MN1, W1, D1, H4, and H1 files. Live mode fetches all five timeframes when `TWELVE_DATA_API_KEY` is configured.
+
 ## Live XAUUSD Feed
 
 The web platform can fetch live H4 and H1 XAU/USD candles from Twelve Data.

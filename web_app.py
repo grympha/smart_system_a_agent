@@ -9,6 +9,8 @@ from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
 from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
+from upas import UPASAgent
+from upas.models import UPASAnalysis, UPASInput
 
 
 app = Flask(__name__)
@@ -227,11 +229,22 @@ PAGE = """
     <form method="post" enctype="multipart/form-data">
       <fieldset>
         <legend>Market Data</legend>
+        <label for="analysis_system">Analysis System</label>
+        <select id="analysis_system" name="analysis_system">
+          <option value="ssa" {% if form.analysis_system == "ssa" %}selected{% endif %}>Smart System A</option>
+          <option value="upas" {% if form.analysis_system == "upas" %}selected{% endif %}>UPAS Trade Assistant</option>
+        </select>
         <label for="data_source">Data Source</label>
         <select id="data_source" name="data_source">
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
           <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
         </select>
+        <label for="mn1">MN1 CSV</label>
+        <input id="mn1" name="mn1" type="file" accept=".csv">
+        <label for="w1">W1 CSV</label>
+        <input id="w1" name="w1" type="file" accept=".csv">
+        <label for="d1">D1 CSV</label>
+        <input id="d1" name="d1" type="file" accept=".csv">
         <label for="h4">H4 CSV</label>
         <input id="h4" name="h4" type="file" accept=".csv">
         <label for="h1">H1 CSV</label>
@@ -267,7 +280,49 @@ PAGE = """
         </div>
       {% elif result %}
         <div class="result">
-          {% if is_trade %}
+          {% if upas_analysis %}
+            <div class="status {{ '' if upas_analysis.payload.status == 'VALID_TRADE' else 'no-setup' }}">{{ upas_analysis.payload.status }}</div>
+            <div class="dashboard">
+              <div class="dashboard-grid">
+                <div class="panel">
+                  <h2 class="panel-title">UPAS Market Bias</h2>
+                  <div class="grid">
+                    {% for tf, bias in upas_analysis.payload.market_bias.items() %}
+                      <div class="metric"><span>{{ tf }}</span>{{ bias or "n/a" }}</div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="panel">
+                  <h2 class="panel-title">UPAS Setup</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Name</span>{{ upas_analysis.payload.setup.name }}</div>
+                    <div class="metric"><span>Direction</span>{{ upas_analysis.payload.setup.direction }}</div>
+                    <div class="metric"><span>Score</span>{{ upas_analysis.payload.setup.confluence_score }}/5</div>
+                    <div class="metric"><span>Module</span>{{ upas_analysis.payload.module }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <h2 class="panel-title">UPAS Confluence Checklist</h2>
+                <ul class="checklist">
+                  {% for key, item in upas_analysis.payload.setup.checklist.items() %}
+                    <li>
+                      <span>{{ key.replace('_', ' ').title() }} - {{ item.reason }}</span>
+                      <span class="pill {{ 'pass' if item.passed else 'fail' }}">{{ 'PASS' if item.passed else 'FAIL' }}</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="panel">
+                <h2 class="panel-title">UPAS Trade Plan</h2>
+                <div class="grid">
+                  {% for key, value in upas_analysis.payload.trade_plan.items() %}
+                    <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          {% elif is_trade %}
             <div class="status">Valid SSA Setup</div>
             <div class="grid">
               <div class="metric"><span>Setup</span>{{ result.setup_type }}</div>
@@ -345,8 +400,8 @@ PAGE = """
         </div>
       {% else %}
         <div class="panel">
-          <strong>Choose CSV upload or live XAUUSD feed to run the SSA checklist.</strong>
-          <p class="muted">Screenshots are accepted for intake, but trade analysis still requires OHLCV data so volume and structure rules can be mechanically verified.</p>
+          <strong>Choose Smart System A or UPAS, then select CSV upload or live XAUUSD feed.</strong>
+          <p class="muted">SSA uses H4/H1. UPAS uses MN1, W1, D1, H4, and H1. Screenshots are accepted for intake only.</p>
         </div>
       {% endif %}
     </section>
@@ -367,6 +422,7 @@ def index():
         "risk_mode": request.form.get("risk_mode", "standard"),
         "risk_percent": request.form.get("risk_percent", ""),
         "symbol": request.form.get("symbol", "XAU/USD"),
+        "analysis_system": request.form.get("analysis_system", "ssa"),
         "data_source": request.form.get("data_source", "csv"),
         "volume_override": request.form.get("volume_override") == "on",
     }
@@ -377,12 +433,19 @@ def index():
     image_result = None
     snapshot = None
     checklist_items = []
+    upas_analysis = None
 
     if request.method == "POST":
         try:
+            mn1_file = request.files.get("mn1")
+            w1_file = request.files.get("w1")
+            d1_file = request.files.get("d1")
             h4_file = request.files.get("h4")
             h1_file = request.files.get("h1")
             chart_image = request.files.get("chart_image")
+            has_mn1 = bool(mn1_file and mn1_file.filename)
+            has_w1 = bool(w1_file and w1_file.filename)
+            has_d1 = bool(d1_file and d1_file.filename)
             has_h4 = bool(h4_file and h4_file.filename)
             has_h1 = bool(h1_file and h1_file.filename)
             has_image = bool(chart_image and chart_image.filename)
@@ -394,7 +457,36 @@ def index():
                 volume_override=form["volume_override"],
             )
 
-            if form["data_source"] == "live":
+            if form["analysis_system"] == "upas":
+                if form["data_source"] == "live":
+                    mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
+                elif has_mn1 and has_w1 and has_d1 and has_h4 and has_h1:
+                    loader = DataLoader()
+                    mn1_data = loader.load_csv_stream(TextIOWrapper(mn1_file.stream, encoding="utf-8"), "MN1", form["symbol"])
+                    w1_data = loader.load_csv_stream(TextIOWrapper(w1_file.stream, encoding="utf-8"), "W1", form["symbol"])
+                    d1_data = loader.load_csv_stream(TextIOWrapper(d1_file.stream, encoding="utf-8"), "D1", form["symbol"])
+                    h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
+                    h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
+                elif has_image:
+                    image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
+                    mn1_data = w1_data = d1_data = h4_data = h1_data = None
+                else:
+                    error = "UPAS requires MN1, W1, D1, H4, and H1 CSV files, or live data mode."
+                    mn1_data = w1_data = d1_data = h4_data = h1_data = None
+
+                if all([mn1_data, w1_data, d1_data, h4_data, h1_data]):
+                    upas_input = UPASInput(
+                        mn1=mn1_data,
+                        w1=w1_data,
+                        d1=d1_data,
+                        h4=h4_data,
+                        h1=h1_data,
+                        account_balance=float(form["balance"]),
+                    )
+                    upas_analysis = UPASAgent().analyze(upas_input)
+                    result = upas_analysis.payload
+                    output = upas_analysis.summary
+            elif form["data_source"] == "live":
                 h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
                 agent = SmartSystemAAgent()
                 snapshot = agent.analyze_with_snapshot(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
@@ -433,6 +525,7 @@ def index():
         image_result=image_result,
         snapshot=snapshot,
         checklist_items=checklist_items,
+        upas_analysis=upas_analysis,
     )
 
 
