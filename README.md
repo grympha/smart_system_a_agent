@@ -60,6 +60,20 @@ The web platform lets you upload H4 and H1 CSV files, choose account balance and
 
 The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
 
+## Live XAUUSD Feed
+
+The web platform can fetch live H4 and H1 XAU/USD candles from Twelve Data.
+
+Set this environment variable before using live mode:
+
+```text
+TWELVE_DATA_API_KEY=your_api_key
+```
+
+On Render, add it under **Environment** for the web service. Then choose **Live XAUUSD Feed** in the app.
+
+Live mode still follows the same strict Smart System A rules. If the provider returns missing volume, condition 6 fails unless volume override is explicitly enabled.
+
 ## Deploy Online
 
 This project is ready for a Python web host that supports WSGI apps, such as Render, Railway, Fly.io, or Heroku-style platforms.

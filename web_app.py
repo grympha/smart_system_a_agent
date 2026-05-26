@@ -7,6 +7,7 @@ from flask import Flask, render_template_string, request
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
+from smart_system_a.live_data import LiveXAUUSDFeed
 from smart_system_a.models import AccountSettings, NoSetupResult, RiskSettings, TradeSetup
 
 
@@ -179,6 +180,11 @@ PAGE = """
     <form method="post" enctype="multipart/form-data">
       <fieldset>
         <legend>Market Data</legend>
+        <label for="data_source">Data Source</label>
+        <select id="data_source" name="data_source">
+          <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
+          <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
+        </select>
         <label for="h4">H4 CSV</label>
         <input id="h4" name="h4" type="file" accept=".csv">
         <label for="h1">H1 CSV</label>
@@ -244,8 +250,8 @@ PAGE = """
         </div>
       {% else %}
         <div class="panel">
-          <strong>Upload H4 and H1 CSV files to run the SSA checklist.</strong>
-          <p class="muted">Screenshots are accepted for intake, but trade analysis still requires OHLCV CSV data so volume and structure rules can be mechanically verified.</p>
+          <strong>Choose CSV upload or live XAUUSD feed to run the SSA checklist.</strong>
+          <p class="muted">Screenshots are accepted for intake, but trade analysis still requires OHLCV data so volume and structure rules can be mechanically verified.</p>
         </div>
       {% endif %}
     </section>
@@ -265,7 +271,8 @@ def index():
         "balance": request.form.get("balance", "100000"),
         "risk_mode": request.form.get("risk_mode", "standard"),
         "risk_percent": request.form.get("risk_percent", ""),
-        "symbol": request.form.get("symbol", "XAUUSD"),
+        "symbol": request.form.get("symbol", "XAU/USD"),
+        "data_source": request.form.get("data_source", "csv"),
         "volume_override": request.form.get("volume_override") == "on",
     }
     result = None
@@ -283,16 +290,25 @@ def index():
             has_h1 = bool(h1_file and h1_file.filename)
             has_image = bool(chart_image and chart_image.filename)
 
-            if has_h4 and has_h1:
+            risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
+            settings = RiskSettings(
+                risk_mode=form["risk_mode"],
+                risk_percent=risk_percent or 0.9,
+                volume_override=form["volume_override"],
+            )
+
+            if form["data_source"] == "live":
+                h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
+                agent = SmartSystemAAgent()
+                result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                output = agent.format_result(result)
+                is_trade = isinstance(result, TradeSetup)
+                if isinstance(result, NoSetupResult):
+                    is_trade = False
+            elif has_h4 and has_h1:
                 loader = DataLoader()
                 h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
                 h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
-                risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
-                settings = RiskSettings(
-                    risk_mode=form["risk_mode"],
-                    risk_percent=risk_percent or 0.9,
-                    volume_override=form["volume_override"],
-                )
                 agent = SmartSystemAAgent()
                 result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
                 output = agent.format_result(result)
