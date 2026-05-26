@@ -5,6 +5,7 @@ from io import BytesIO
 from PIL import Image
 
 from web_app import app
+from tests.conftest import _bullish_h1, _bullish_h4
 
 
 def test_home_page_loads() -> None:
@@ -30,3 +31,30 @@ def test_image_upload_returns_image_intake_no_setup() -> None:
 
     assert response.status_code == 200
     assert b"Image Accepted - No Setup" in response.data
+
+
+def test_dashboard_sections_render_for_csv_upload() -> None:
+    def csv_bytes(data) -> BytesIO:
+        text = "timestamp,open,high,low,close,volume\n"
+        for c in data.candles:
+            text += f"{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+        return BytesIO(text.encode("utf-8"))
+
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={
+            "h4": (csv_bytes(_bullish_h4()), "h4.csv"),
+            "h1": (csv_bytes(_bullish_h1()), "h1.csv"),
+            "balance": "100000",
+            "risk_mode": "standard",
+            "symbol": "XAU/USD",
+            "data_source": "csv",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"H4 Trend And Wave" in response.data
+    assert b"H1 Structure And Entry" in response.data
+    assert b"Six-Condition SSA Checklist" in response.data

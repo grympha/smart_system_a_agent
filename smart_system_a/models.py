@@ -142,3 +142,11 @@ class NoSetupResult:
     market_state: MarketState
     what_next: str
     reasoning_summary: str
+
+
+@dataclass(frozen=True)
+class AnalysisSnapshot:
+    h4: H4AnalysisResult
+    h1: H1AnalysisResult
+    checklist: ChecklistResult
+    result: TradeSetup | NoSetupResult

@@ -4,7 +4,7 @@ from .checklist_validator import ChecklistValidator
 from .data_loader import DataLoader
 from .h1_analyzer import H1Analyzer
 from .h4_analyzer import H4Analyzer
-from .models import AccountSettings, Direction, NoSetupResult, OHLCVData, RiskSettings, TradeSetup
+from .models import AccountSettings, AnalysisSnapshot, Direction, NoSetupResult, OHLCVData, RiskSettings, TradeSetup
 from .output_formatter import OutputFormatter
 from .risk_calculator import RiskCalculator
 
@@ -46,6 +46,15 @@ class SmartSystemAAgent:
         account: AccountSettings,
         settings: RiskSettings | None = None,
     ) -> TradeSetup | NoSetupResult:
+        return self.analyze_with_snapshot(h4_data, h1_data, account, settings).result
+
+    def analyze_with_snapshot(
+        self,
+        h4_data: OHLCVData,
+        h1_data: OHLCVData,
+        account: AccountSettings,
+        settings: RiskSettings | None = None,
+    ) -> AnalysisSnapshot:
         settings = settings or RiskSettings()
         h4 = self.h4_analyzer.analyze(h4_data)
         expected = h4.trend if h4.trend in {Direction.BULLISH, Direction.BEARISH} else Direction.NEUTRAL
@@ -54,7 +63,7 @@ class SmartSystemAAgent:
 
         reasoning = self._reasoning_summary(h4, h1, checklist.passed)
         if not checklist.passed:
-            return NoSetupResult(
+            result = NoSetupResult(
                 failed_rules=checklist.failed_rules,
                 h4_wave_position=h4.wave_context,
                 active_wave=h4.active_wave,
@@ -62,11 +71,12 @@ class SmartSystemAAgent:
                 what_next=self._what_next(checklist.failed_rules, h4.trend),
                 reasoning_summary=reasoning,
             )
+            return AnalysisSnapshot(h4=h4, h1=h1, checklist=checklist, result=result)
 
         confidence = self._confidence(h4, h1)
         setup_type = "BUY LIMIT" if expected == Direction.BULLISH else "SELL LIMIT"
         entry = h1.entry_zone if h1.entry_zone is not None else h1_data.candles[-1].close
-        return self.risk_calculator.calculate(
+        result = self.risk_calculator.calculate(
             direction=expected,
             entry=entry,
             account=account,
@@ -76,6 +86,7 @@ class SmartSystemAAgent:
             setup_type=setup_type,
             is_wave_3_continuation=h4.active_wave == 3,
         )
+        return AnalysisSnapshot(h4=h4, h1=h1, checklist=checklist, result=result)
 
     def format_result(self, result: TradeSetup | NoSetupResult) -> str:
         if isinstance(result, TradeSetup):

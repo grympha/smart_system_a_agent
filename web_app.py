@@ -8,7 +8,7 @@ from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
-from smart_system_a.models import AccountSettings, NoSetupResult, RiskSettings, TradeSetup
+from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
 
 
 app = Flask(__name__)
@@ -163,10 +163,57 @@ PAGE = """
       font-size: 13px;
     }
     .muted { color: var(--muted); }
+    .dashboard {
+      display: grid;
+      gap: 14px;
+    }
+    .panel-title {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .checklist {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .checklist li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 10px;
+      background: var(--panel);
+    }
+    .pill {
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .pill.pass { background: #dcfce7; color: var(--ok); }
+    .pill.fail { background: #fee4e2; color: var(--danger); }
+    .reasons {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       form { border-right: 0; border-bottom: 1px solid var(--line); }
       .grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      .dashboard-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -235,6 +282,54 @@ PAGE = """
           {% else %}
             <div class="status no-setup">No Setup</div>
           {% endif %}
+          {% if snapshot %}
+            <div class="dashboard">
+              <div class="dashboard-grid">
+                <div class="panel">
+                  <h2 class="panel-title">H4 Trend And Wave</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Trend</span>{{ snapshot.h4.trend.value }}</div>
+                    <div class="metric"><span>Wave</span>{{ snapshot.h4.wave_context }}</div>
+                    <div class="metric"><span>Active Wave</span>{{ snapshot.h4.active_wave or "Unclear" }}</div>
+                    <div class="metric"><span>State</span>{{ snapshot.h4.market_state.value }}</div>
+                  </div>
+                  <ul class="reasons">
+                    {% for reason in snapshot.h4.reasons %}
+                      <li>{{ reason }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+                <div class="panel">
+                  <h2 class="panel-title">H1 Structure And Entry</h2>
+                  <div class="grid">
+                    <div class="metric"><span>BOS</span>{{ snapshot.h1.bos_direction.value }}</div>
+                    <div class="metric"><span>BOS Level</span>{{ snapshot.h1.bos_level or "None" }}</div>
+                    <div class="metric"><span>Breakout</span>{{ snapshot.h1.breakout_strength }}</div>
+                    <div class="metric"><span>Entry Zone</span>{{ snapshot.h1.entry_zone or "Invalid" }}</div>
+                  </div>
+                  <ul class="reasons">
+                    {% for reason in snapshot.h1.reasons %}
+                      <li>{{ reason }}</li>
+                    {% endfor %}
+                    {% if not snapshot.h1.reasons %}
+                      <li>H1 structure, pullback, candle behavior, and volume are aligned.</li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </div>
+              <div class="panel">
+                <h2 class="panel-title">Six-Condition SSA Checklist</h2>
+                <ul class="checklist">
+                  {% for item in checklist_items %}
+                    <li>
+                      <span>{{ item.label }}</span>
+                      <span class="pill {{ 'pass' if item.passed else 'fail' }}">{{ 'PASS' if item.passed else 'FAIL' }}</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </div>
+          {% endif %}
           <pre>{{ output }}</pre>
         </div>
       {% elif image_result %}
@@ -280,6 +375,8 @@ def index():
     error = None
     is_trade = False
     image_result = None
+    snapshot = None
+    checklist_items = []
 
     if request.method == "POST":
         try:
@@ -300,8 +397,10 @@ def index():
             if form["data_source"] == "live":
                 h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
                 agent = SmartSystemAAgent()
-                result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                snapshot = agent.analyze_with_snapshot(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                result = snapshot.result
                 output = agent.format_result(result)
+                checklist_items = build_checklist_items(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -310,8 +409,10 @@ def index():
                 h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
                 h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
                 agent = SmartSystemAAgent()
-                result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                snapshot = agent.analyze_with_snapshot(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                result = snapshot.result
                 output = agent.format_result(result)
+                checklist_items = build_checklist_items(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -330,7 +431,21 @@ def index():
         error=error,
         is_trade=is_trade,
         image_result=image_result,
+        snapshot=snapshot,
+        checklist_items=checklist_items,
     )
+
+
+def build_checklist_items(snapshot: AnalysisSnapshot) -> list[dict[str, object]]:
+    checklist = snapshot.checklist
+    return [
+        {"label": "H4 trend aligned", "passed": checklist.condition_1_h4_trend_aligned},
+        {"label": "Correct Elliott Wave position", "passed": checklist.condition_2_wave_position_correct},
+        {"label": "Clean H1 breakout structure", "passed": checklist.condition_3_clean_breakout},
+        {"label": "Pullback reaches the correct SSA zone", "passed": checklist.condition_4_pullback_reaches_zone},
+        {"label": "Valid candle confirmation or rejection behavior", "passed": checklist.condition_5_valid_candle_behavior},
+        {"label": "Volume supports direction", "passed": checklist.condition_6_volume_supports_direction},
+    ]
 
 
 if __name__ == "__main__":

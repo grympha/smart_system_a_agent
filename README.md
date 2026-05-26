@@ -60,6 +60,8 @@ The web platform lets you upload H4 and H1 CSV files, choose account balance and
 
 The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
 
+Analysis results are shown in a dashboard with separate sections for H4 trend and wave context, H1 structure and entry behavior, the six-condition SSA checklist, risk metrics, and the exact final SSA output.
+
 ## Live XAUUSD Feed
 
 The web platform can fetch live H4 and H1 XAU/USD candles from Twelve Data.
