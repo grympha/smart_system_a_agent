@@ -1,0 +1,116 @@
+# Smart System A Agent
+
+Smart System A Agent is a strict Python analysis tool for XAUUSD. It analyzes H4 trend and Elliott Wave context first, then H1 breakout, pullback, candle behavior, and volume confirmation. It does not place trades and does not mix in other trading strategies or indicators.
+
+## What It Does
+
+- Reads H4 and H1 OHLCV CSV files.
+- Determines H4 trend, market state, and a rule-based Elliott Wave approximation.
+- Detects H1 BOS, breakout quality, retest zone, candle confirmation, and volume behavior.
+- Applies the six-condition Smart System A checklist.
+- Returns no setup when any SSA rule fails.
+- Calculates XAUUSD SL, TP1, TP2, risk amount, and lot size only after all six conditions pass.
+- Applies FTMO-compatible fixed risk mechanics using `1 pip = 1.00 price movement` and `1 lot = $100 per pip`.
+
+## Install
+
+```bash
+cd smart_system_a_agent
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## CSV Format
+
+CSV files must contain:
+
+```csv
+timestamp,open,high,low,close,volume
+2026-01-01 00:00,4100,4110,4095,4108,1200
+```
+
+If volume is missing, the agent reports `Volume analysis limited - OHLCV volume data missing.` Condition 6 does not automatically pass unless `--volume-override` is explicitly provided.
+
+## Run
+
+```bash
+python main.py --h4 data/xauusd_h4.csv --h1 data/xauusd_h1.csv --balance 100000 --risk-mode standard
+```
+
+Optional high-confidence mode:
+
+```bash
+python main.py --h4 data/xauusd_h4.csv --h1 data/xauusd_h1.csv --balance 100000 --risk-mode high_confidence --risk-percent 1.2
+```
+
+## Run The Web Platform Locally
+
+```bash
+python web_app.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The web platform lets you upload H4 and H1 CSV files, choose account balance and risk mode, and receive the same strict SSA valid setup or no-setup output as the CLI.
+
+## Deploy Online
+
+This project is ready for a Python web host that supports WSGI apps, such as Render, Railway, Fly.io, or Heroku-style platforms.
+
+For step-by-step publishing instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Recommended Render settings:
+
+```text
+Build Command: pip install -r requirements.txt
+Start Command: gunicorn web_app:app
+```
+
+The included `Procfile` also supports hosts that detect Heroku-style Python apps:
+
+```text
+web: gunicorn web_app:app
+```
+
+To make it publicly available, push this project to a Git repository and connect that repository to your hosting provider. The app does not need trading credentials because it does not execute trades.
+
+## Test
+
+```bash
+pytest
+```
+
+## Example Valid Setup Output
+
+```text
+Setup Type: BUY LIMIT
+Entry: 4125
+SL: 4085
+TP1: 4165
+TP2: 4205
+Pip Distance: 40.0
+Risk %: 1.2
+Lot Size: 0.3
+Confidence Level: High
+Reasoning Summary: H4 wave position: Wave 3 likely; active wave: 3; market state: expanding. H1 BOS: bullish at 4125; pullback zone: 4125; candle behavior: confirmed rejection/acceptance; volume behavior: impulse volume exceeds pullback volume; all six SSA conditions passed.
+```
+
+## Example No Setup Output
+
+```text
+No setup - Volume supports direction
+Current H4 wave position: Wave 3 likely
+Active wave number: 3
+Market state: expanding
+What must happen next: Wait for a clear H4 Wave 3 or Wave 5 continuation, clean H1 BOS, valid retest zone, rejection candle, and volume expansion supporting the BUY direction.
+Reasoning Summary: H4 wave position: Wave 3 likely; active wave: 3; market state: expanding. H1 BOS: bullish at 4125; pullback zone: 4125; candle behavior: confirmed rejection/acceptance; volume behavior: Volume analysis limited - OHLCV volume data missing; one or more SSA conditions failed.
+```
+
+## Risk Warning
+
+This project is an analysis tool only. It is not financial advice, not a signal service, and not an execution bot. It never places trades, never widens SL, never increases risk, and never overrides failed Smart System A rules unless the user explicitly enables the volume override.
