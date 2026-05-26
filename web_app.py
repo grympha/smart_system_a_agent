@@ -6,6 +6,7 @@ from flask import Flask, render_template_string, request
 
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
+from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.models import AccountSettings, NoSetupResult, RiskSettings, TradeSetup
 
 
@@ -179,9 +180,11 @@ PAGE = """
       <fieldset>
         <legend>Market Data</legend>
         <label for="h4">H4 CSV</label>
-        <input id="h4" name="h4" type="file" accept=".csv" required>
+        <input id="h4" name="h4" type="file" accept=".csv">
         <label for="h1">H1 CSV</label>
-        <input id="h1" name="h1" type="file" accept=".csv" required>
+        <input id="h1" name="h1" type="file" accept=".csv">
+        <label for="chart_image">Chart Screenshot</label>
+        <input id="chart_image" name="chart_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
       </fieldset>
       <fieldset>
         <legend>Risk Settings</legend>
@@ -228,10 +231,21 @@ PAGE = """
           {% endif %}
           <pre>{{ output }}</pre>
         </div>
+      {% elif image_result %}
+        <div class="result">
+          <div class="status no-setup">Image Accepted - No Setup</div>
+          <div class="grid">
+            <div class="metric"><span>File</span>{{ image_result.filename }}</div>
+            <div class="metric"><span>Format</span>{{ image_result.image_format }}</div>
+            <div class="metric"><span>Width</span>{{ image_result.width }}</div>
+            <div class="metric"><span>Height</span>{{ image_result.height }}</div>
+          </div>
+          <pre>{{ image_result.message }}</pre>
+        </div>
       {% else %}
         <div class="panel">
           <strong>Upload H4 and H1 CSV files to run the SSA checklist.</strong>
-          <p class="muted">The platform only analyzes. It does not place trades, invent rules, or produce entries when any SSA condition fails.</p>
+          <p class="muted">Screenshots are accepted for intake, but trade analysis still requires OHLCV CSV data so volume and structure rules can be mechanically verified.</p>
         </div>
       {% endif %}
     </section>
@@ -258,30 +272,49 @@ def index():
     output = None
     error = None
     is_trade = False
+    image_result = None
 
     if request.method == "POST":
         try:
-            h4_file = request.files["h4"]
-            h1_file = request.files["h1"]
-            loader = DataLoader()
-            h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
-            h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
-            risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
-            settings = RiskSettings(
-                risk_mode=form["risk_mode"],
-                risk_percent=risk_percent or 0.9,
-                volume_override=form["volume_override"],
-            )
-            agent = SmartSystemAAgent()
-            result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
-            output = agent.format_result(result)
-            is_trade = isinstance(result, TradeSetup)
-            if isinstance(result, NoSetupResult):
-                is_trade = False
+            h4_file = request.files.get("h4")
+            h1_file = request.files.get("h1")
+            chart_image = request.files.get("chart_image")
+            has_h4 = bool(h4_file and h4_file.filename)
+            has_h1 = bool(h1_file and h1_file.filename)
+            has_image = bool(chart_image and chart_image.filename)
+
+            if has_h4 and has_h1:
+                loader = DataLoader()
+                h4_data = loader.load_csv_stream(TextIOWrapper(h4_file.stream, encoding="utf-8"), "H4", form["symbol"])
+                h1_data = loader.load_csv_stream(TextIOWrapper(h1_file.stream, encoding="utf-8"), "H1", form["symbol"])
+                risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
+                settings = RiskSettings(
+                    risk_mode=form["risk_mode"],
+                    risk_percent=risk_percent or 0.9,
+                    volume_override=form["volume_override"],
+                )
+                agent = SmartSystemAAgent()
+                result = agent.analyze(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
+                output = agent.format_result(result)
+                is_trade = isinstance(result, TradeSetup)
+                if isinstance(result, NoSetupResult):
+                    is_trade = False
+            elif has_image:
+                image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
+            else:
+                error = "Upload both H4 and H1 CSV files, or upload a chart screenshot for image intake."
         except Exception as exc:
             error = str(exc)
 
-    return render_template_string(PAGE, form=form, result=result, output=output, error=error, is_trade=is_trade)
+    return render_template_string(
+        PAGE,
+        form=form,
+        result=result,
+        output=output,
+        error=error,
+        is_trade=is_trade,
+        image_result=image_result,
+    )
 
 
 if __name__ == "__main__":

@@ -58,6 +58,8 @@ http://127.0.0.1:8000
 
 The web platform lets you upload H4 and H1 CSV files, choose account balance and risk mode, and receive the same strict SSA valid setup or no-setup output as the CLI.
 
+The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
+
 ## Deploy Online
 
 This project is ready for a Python web host that supports WSGI apps, such as Render, Railway, Fly.io, or Heroku-style platforms.
