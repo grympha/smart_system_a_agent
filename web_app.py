@@ -249,6 +249,37 @@ PAGE = """
       line-height: 1.5;
       color: var(--ink);
     }
+    .decision-summary {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      background: #0f1726;
+    }
+    .decision-summary h2 {
+      margin: 0 0 14px;
+      font-size: 15px;
+    }
+    .summary-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+    }
+    .summary-row {
+      display: grid;
+      grid-template-columns: 190px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      line-height: 1.45;
+    }
+    .summary-row dt {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .summary-row dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
     details.raw-output {
       margin-top: 14px;
       border-top: 1px solid var(--line);
@@ -265,6 +296,7 @@ PAGE = """
       form { border-right: 0; border-bottom: 1px solid var(--line); }
       .grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
       .dashboard-grid { grid-template-columns: 1fr; }
+      .summary-row { grid-template-columns: 1fr; gap: 4px; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -344,14 +376,6 @@ PAGE = """
                   {% endfor %}
                 </div>
               </div>
-              <div class="panel">
-                <h2 class="panel-title">UPAS Decision Summary</h2>
-                <p class="summary-text">{{ upas_analysis.payload.summary }}</p>
-                <p class="summary-text">{{ upas_analysis.payload.reasoning }}</p>
-                {% if upas_analysis.payload.invalidation %}
-                  <p class="summary-text"><strong>Invalidation:</strong> {{ upas_analysis.payload.invalidation }}</p>
-                {% endif %}
-              </div>
             </div>
           {% elif is_trade %}
             <div class="status">Valid SSA Setup</div>
@@ -416,9 +440,22 @@ PAGE = """
               </div>
             </div>
           {% endif %}
-          {% if upas_analysis %}
+          {% if summary_details %}
+            <div class="decision-summary">
+              <h2>Decision Summary</h2>
+              <dl class="summary-list">
+                {% for item in summary_details %}
+                  <div class="summary-row">
+                    <dt>{{ item.label }}</dt>
+                    <dd>{{ item.value }}</dd>
+                  </div>
+                {% endfor %}
+              </dl>
+            </div>
+          {% endif %}
+          {% if upas_analysis or snapshot %}
             <details class="raw-output">
-              <summary>View raw UPAS JSON</summary>
+              <summary>View raw analysis output</summary>
               <pre>{{ output }}</pre>
             </details>
           {% else %}
@@ -472,6 +509,7 @@ def index():
     snapshot = None
     checklist_items = []
     upas_analysis = None
+    summary_details = []
 
     if request.method == "POST":
         try:
@@ -520,6 +558,7 @@ def index():
                     upas_analysis = UPASAgent().analyze(upas_input)
                     result = upas_analysis.payload
                     output = upas_analysis.summary
+                    summary_details = build_upas_summary(upas_analysis)
             elif form["data_source"] == "live":
                 h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
                 agent = SmartSystemAAgent()
@@ -527,6 +566,7 @@ def index():
                 result = snapshot.result
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
+                summary_details = build_ssa_summary(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -543,6 +583,7 @@ def index():
                 result = snapshot.result
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
+                summary_details = build_ssa_summary(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -564,6 +605,7 @@ def index():
         snapshot=snapshot,
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
+        summary_details=summary_details,
     )
 
 
@@ -577,6 +619,48 @@ def build_checklist_items(snapshot: AnalysisSnapshot) -> list[dict[str, object]]
         {"label": "Valid candle confirmation or rejection behavior", "passed": checklist.condition_5_valid_candle_behavior},
         {"label": "Volume supports direction", "passed": checklist.condition_6_volume_supports_direction},
     ]
+
+
+def build_ssa_summary(snapshot: AnalysisSnapshot) -> list[dict[str, object]]:
+    result = snapshot.result
+    if isinstance(result, NoSetupResult):
+        return [
+            {"label": "Decision", "value": "No setup"},
+            {"label": "Failed Rules", "value": "; ".join(result.failed_rules)},
+            {"label": "H4 Wave Position", "value": result.h4_wave_position},
+            {"label": "Active Wave", "value": result.active_wave if result.active_wave is not None else "Unidentifiable"},
+            {"label": "Market State", "value": result.market_state.value},
+            {"label": "Next Requirement", "value": result.what_next},
+            {"label": "Reasoning", "value": result.reasoning_summary},
+        ]
+    return [
+        {"label": "Decision", "value": "Valid setup"},
+        {"label": "Setup Type", "value": result.setup_type},
+        {"label": "Entry / SL / TP", "value": f"{result.entry} / {result.sl} / {result.tp1}, {result.tp2}"},
+        {"label": "Risk And Lot", "value": f"{result.risk_percent}% risk, {result.lot_size} lots"},
+        {"label": "Confidence", "value": result.confidence_level},
+        {"label": "Reasoning", "value": result.reasoning_summary},
+    ]
+
+
+def build_upas_summary(upas_analysis: UPASAnalysis) -> list[dict[str, object]]:
+    payload = upas_analysis.payload
+    failed = [
+        key.replace("_", " ").title()
+        for key, item in payload["setup"]["checklist"].items()
+        if not item["passed"]
+    ]
+    details = [
+        {"label": "Decision", "value": payload["status"]},
+        {"label": "Setup", "value": f"{payload['setup']['name']} {payload['setup']['direction']}"},
+        {"label": "Confluence Score", "value": f"{payload['setup']['confluence_score']}/5"},
+        {"label": "Failed Conditions", "value": "; ".join(failed) if failed else "None"},
+        {"label": "Reasoning", "value": payload["reasoning"]},
+        {"label": "Summary", "value": payload["summary"]},
+    ]
+    if payload["invalidation"]:
+        details.append({"label": "Invalidation", "value": payload["invalidation"]})
+    return details
 
 
 if __name__ == "__main__":

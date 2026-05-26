@@ -58,6 +58,8 @@ def test_dashboard_sections_render_for_csv_upload() -> None:
     assert b"H4 Trend And Wave" in response.data
     assert b"H1 Structure And Entry" in response.data
     assert b"Six-Condition SSA Checklist" in response.data
+    assert b"Decision Summary" in response.data
+    assert b"View raw analysis output" in response.data
 
 
 def test_upas_selector_renders_upas_dashboard() -> None:
@@ -90,5 +92,5 @@ def test_upas_selector_renders_upas_dashboard() -> None:
     assert b"UPAS Market Bias" in response.data
     assert b"UPAS Confluence Checklist" in response.data
     assert b"UPAS Trade Assistant" in response.data
-    assert b"UPAS Decision Summary" in response.data
-    assert b"View raw UPAS JSON" in response.data
+    assert b"Decision Summary" in response.data
+    assert b"View raw analysis output" in response.data
