@@ -17,6 +17,8 @@ def test_home_page_loads() -> None:
     assert b"Gold Smart Agent" in response.data
     assert b"Run Analysis" in response.data
     assert b"Risk Settings" not in response.data
+    assert b"SSA CSV Template" in response.data
+    assert b"UPAS CSV Template" in response.data
 
 
 def test_image_upload_returns_image_intake_no_setup() -> None:
@@ -94,3 +96,44 @@ def test_upas_selector_renders_upas_dashboard() -> None:
     assert b"UPAS Trade Assistant" in response.data
     assert b"Decision Summary" in response.data
     assert b"View raw analysis output" in response.data
+
+
+def test_template_downloads() -> None:
+    client = app.test_client()
+
+    ssa = client.get("/templates/ssa.csv")
+    upas = client.get("/templates/upas.csv")
+
+    assert ssa.status_code == 200
+    assert b"timeframe,timestamp,open,high,low,close,volume" in ssa.data
+    assert b"H4" in ssa.data
+    assert b"H1" in ssa.data
+    assert upas.status_code == 200
+    assert b"MN1" in upas.data
+    assert b"W1" in upas.data
+    assert b"D1" in upas.data
+
+
+def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:
+    def csv_bytes() -> BytesIO:
+        text = "timeframe,timestamp,open,high,low,close,volume\n"
+        for timeframe, data in [("H4", _bullish_h4(volume=False)), ("H1", _bullish_h1(volume=False))]:
+            for c in data.candles:
+                volume = "" if c.volume is None else c.volume
+                text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{volume}\n"
+        return BytesIO(text.encode("utf-8"))
+
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={
+            "ohlc_data": (csv_bytes(), "ohlc.csv"),
+            "symbol": "XAU/USD",
+            "data_source": "csv",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"Why No Trade?" in response.data
+    assert b"Volume supports direction" in response.data

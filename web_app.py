@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from io import TextIOWrapper
 
-from flask import Flask, render_template_string, request
+from flask import Flask, Response, render_template_string, request
 
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
 from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
+from templates import ssa_template_csv, upas_template_csv
 from upas import UPASAgent
 from upas.models import UPASAnalysis, UPASInput
 
@@ -280,6 +281,51 @@ PAGE = """
       margin: 0;
       overflow-wrap: anywhere;
     }
+    .quick-actions {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr 1fr;
+      margin-top: 12px;
+    }
+    .quick-actions a {
+      display: block;
+      text-align: center;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: var(--accent);
+      background: #0f1726;
+      font-size: 13px;
+    }
+    .why-panel {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      background: #111827;
+    }
+    .why-panel h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+    .why-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .why-list li {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #0f1726;
+      line-height: 1.45;
+    }
+    body[data-source="live"] .csv-only {
+      display: none;
+    }
     details.raw-output {
       margin-top: 14px;
       border-top: 1px solid var(--line);
@@ -297,6 +343,7 @@ PAGE = """
       .grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
       .dashboard-grid { grid-template-columns: 1fr; }
       .summary-row { grid-template-columns: 1fr; gap: 4px; }
+      .quick-actions { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -320,8 +367,14 @@ PAGE = """
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
           <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
         </select>
-        <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. For Smart System A include H4 and H1 rows. For UPAS include MN1, W1, D1, H4, and H1 rows. Volume may be blank, but volume-based rules may fail.">!</span></label>
-        <input id="ohlc_data" name="ohlc_data" type="file" accept=".csv">
+        <div class="csv-only">
+          <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. For Smart System A include H4 and H1 rows. For UPAS include MN1, W1, D1, H4, and H1 rows. Volume may be blank, but volume-based rules may fail.">!</span></label>
+          <input id="ohlc_data" name="ohlc_data" type="file" accept=".csv">
+          <div class="quick-actions">
+            <a href="/templates/ssa.csv">SSA CSV Template</a>
+            <a href="/templates/upas.csv">UPAS CSV Template</a>
+          </div>
+        </div>
         <label for="chart_image">Chart Screenshot</label>
         <input id="chart_image" name="chart_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
       </fieldset>
@@ -453,6 +506,16 @@ PAGE = """
               </dl>
             </div>
           {% endif %}
+          {% if why_no_trade %}
+            <div class="why-panel">
+              <h2>Why No Trade?</h2>
+              <ul class="why-list">
+                {% for item in why_no_trade %}
+                  <li><strong>{{ item.title }}</strong><br>{{ item.detail }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
           {% if upas_analysis or snapshot %}
             <details class="raw-output">
               <summary>View raw analysis output</summary>
@@ -481,6 +544,12 @@ PAGE = """
       {% endif %}
     </section>
   </main>
+  <script>
+    const dataSource = document.getElementById("data_source");
+    const syncSource = () => document.body.dataset.source = dataSource.value;
+    dataSource.addEventListener("change", syncSource);
+    syncSource();
+  </script>
 </body>
 </html>
 """
@@ -488,6 +557,24 @@ PAGE = """
 
 def create_app() -> Flask:
     return app
+
+
+@app.get("/templates/ssa.csv")
+def download_ssa_template() -> Response:
+    return Response(
+        ssa_template_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=ssa_ohlc_template.csv"},
+    )
+
+
+@app.get("/templates/upas.csv")
+def download_upas_template() -> Response:
+    return Response(
+        upas_template_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=upas_ohlc_template.csv"},
+    )
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -510,6 +597,7 @@ def index():
     checklist_items = []
     upas_analysis = None
     summary_details = []
+    why_no_trade = []
 
     if request.method == "POST":
         try:
@@ -559,6 +647,7 @@ def index():
                     result = upas_analysis.payload
                     output = upas_analysis.summary
                     summary_details = build_upas_summary(upas_analysis)
+                    why_no_trade = build_upas_why_no_trade(upas_analysis)
             elif form["data_source"] == "live":
                 h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
                 agent = SmartSystemAAgent()
@@ -567,6 +656,7 @@ def index():
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
                 summary_details = build_ssa_summary(snapshot)
+                why_no_trade = build_ssa_why_no_trade(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -584,6 +674,7 @@ def index():
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
                 summary_details = build_ssa_summary(snapshot)
+                why_no_trade = build_ssa_why_no_trade(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
@@ -606,6 +697,7 @@ def index():
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
         summary_details=summary_details,
+        why_no_trade=why_no_trade,
     )
 
 
@@ -660,6 +752,38 @@ def build_upas_summary(upas_analysis: UPASAnalysis) -> list[dict[str, object]]:
     ]
     if payload["invalidation"]:
         details.append({"label": "Invalidation", "value": payload["invalidation"]})
+    return details
+
+
+def build_ssa_why_no_trade(snapshot: AnalysisSnapshot) -> list[dict[str, str]]:
+    if isinstance(snapshot.result, TradeSetup):
+        return []
+    failed = set(snapshot.result.failed_rules)
+    details = []
+    rule_guidance = {
+        "H4 trend aligned": "Wait for H4 trend and H1 BOS to point in the same direction.",
+        "Correct Elliott Wave position, preferably Wave 3 or Wave 5 continuation": "Wait for a clearer H4 Wave 3 or Wave 5 continuation context.",
+        "Clean H1 breakout structure": "Wait for a clean H1 close beyond structure with displacement and limited wick rejection.",
+        "Pullback reaches the correct SSA zone": "Wait for price to retest broken structure and hold the valid SSA zone.",
+        "Valid candle confirmation or rejection behavior": "Wait for a rejection or confirmation candle from the retest zone.",
+        "Volume supports direction": "Use OHLCV data with volume expansion, or wait for impulse volume to exceed pullback volume.",
+    }
+    for rule in failed:
+        details.append({"title": rule, "detail": rule_guidance.get(rule, "Wait for this SSA condition to pass.")})
+    return details
+
+
+def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]:
+    payload = upas_analysis.payload
+    if payload["status"] == "VALID_TRADE":
+        return []
+    details = []
+    for key, item in payload["setup"]["checklist"].items():
+        if not item["passed"]:
+            title = key.replace("_", " ").title()
+            details.append({"title": title, "detail": item["reason"]})
+    if payload["reasoning"]:
+        details.append({"title": "Next Requirement", "detail": payload["reasoning"]})
     return details
 
 
