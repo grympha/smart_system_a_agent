@@ -15,7 +15,7 @@ def test_home_page_loads() -> None:
 
     assert response.status_code == 200
     assert b"Smart System A Agent" in response.data
-    assert b"Analyze SSA Setup" in response.data
+    assert b"Run Analysis" in response.data
 
 
 def test_image_upload_returns_image_intake_no_setup() -> None:
@@ -89,3 +89,5 @@ def test_upas_selector_renders_upas_dashboard() -> None:
     assert b"UPAS Market Bias" in response.data
     assert b"UPAS Confluence Checklist" in response.data
     assert b"UPAS Trade Assistant" in response.data
+    assert b"UPAS Decision Summary" in response.data
+    assert b"View raw UPAS JSON" in response.data

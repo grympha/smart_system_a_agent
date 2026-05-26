@@ -211,6 +211,22 @@ PAGE = """
       line-height: 1.45;
       font-size: 13px;
     }
+    .summary-text {
+      margin: 12px 0 0;
+      line-height: 1.5;
+      color: var(--ink);
+    }
+    details.raw-output {
+      margin-top: 14px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    details.raw-output summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
       form { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -270,7 +286,7 @@ PAGE = """
           Allow volume override
         </label>
       </fieldset>
-      <button type="submit">Analyze SSA Setup</button>
+      <button type="submit">Run Analysis</button>
     </form>
     <section class="workspace">
       {% if error %}
@@ -320,6 +336,14 @@ PAGE = """
                     <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
                   {% endfor %}
                 </div>
+              </div>
+              <div class="panel">
+                <h2 class="panel-title">UPAS Decision Summary</h2>
+                <p class="summary-text">{{ upas_analysis.payload.summary }}</p>
+                <p class="summary-text">{{ upas_analysis.payload.reasoning }}</p>
+                {% if upas_analysis.payload.invalidation %}
+                  <p class="summary-text"><strong>Invalidation:</strong> {{ upas_analysis.payload.invalidation }}</p>
+                {% endif %}
               </div>
             </div>
           {% elif is_trade %}
@@ -385,7 +409,14 @@ PAGE = """
               </div>
             </div>
           {% endif %}
-          <pre>{{ output }}</pre>
+          {% if upas_analysis %}
+            <details class="raw-output">
+              <summary>View raw UPAS JSON</summary>
+              <pre>{{ output }}</pre>
+            </details>
+          {% else %}
+            <pre>{{ output }}</pre>
+          {% endif %}
         </div>
       {% elif image_result %}
         <div class="result">
