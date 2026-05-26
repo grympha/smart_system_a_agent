@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from io import TextIOWrapper
 
 from flask import Flask, Response, render_template_string, request
 
+from history_store import add_history, recent_history
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -323,6 +326,30 @@ PAGE = """
       background: #0f1726;
       line-height: 1.45;
     }
+    .image-preview {
+      width: 100%;
+      max-height: 360px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #05070c;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .history-table th,
+    .history-table td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .history-table th {
+      color: var(--muted);
+      font-weight: 700;
+    }
     body[data-source="live"] .csv-only {
       display: none;
     }
@@ -388,6 +415,24 @@ PAGE = """
         </div>
       {% elif result %}
         <div class="result">
+          {% if live_status %}
+            <div class="panel">
+              <h2 class="panel-title">Live Data Status</h2>
+              <div class="grid">
+                <div class="metric"><span>Provider</span>{{ live_status.provider }}</div>
+                <div class="metric"><span>Status</span>{{ live_status.status }}</div>
+                <div class="metric"><span>Last Candle</span>{{ live_status.last_candle_time }}</div>
+                <div class="metric"><span>Total Candles</span>{{ live_status.total_candles }}</div>
+                <div class="metric"><span>Volume Data</span>{{ live_status.volume_status }}</div>
+              </div>
+            </div>
+          {% endif %}
+          {% if image_preview %}
+            <div class="panel">
+              <h2 class="panel-title">Chart Screenshot Preview</h2>
+              <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+            </div>
+          {% endif %}
           {% if upas_analysis %}
             <div class="status {{ '' if upas_analysis.payload.status == 'VALID_TRADE' else 'no-setup' }}">{{ upas_analysis.payload.status }}</div>
             <div class="dashboard">
@@ -528,6 +573,12 @@ PAGE = """
       {% elif image_result %}
         <div class="result">
           <div class="status no-setup">Image Accepted - No Setup</div>
+          {% if image_preview %}
+            <div class="panel">
+              <h2 class="panel-title">Chart Screenshot Preview</h2>
+              <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+            </div>
+          {% endif %}
           <div class="grid">
             <div class="metric"><span>File</span>{{ image_result.filename }}</div>
             <div class="metric"><span>Format</span>{{ image_result.image_format }}</div>
@@ -540,6 +591,35 @@ PAGE = """
         <div class="panel">
           <strong>Choose an analysis system, then upload one OHLC CSV or use the live XAUUSD feed.</strong>
           <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Screenshots are accepted for intake only.</p>
+        </div>
+      {% endif %}
+      {% if history %}
+        <div class="panel">
+          <h2 class="panel-title">Recent Analysis History</h2>
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>System</th>
+                <th>Status</th>
+                <th>Setup</th>
+                <th>Score</th>
+                <th>Summary</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in history %}
+                <tr>
+                  <td>{{ row.created_at }}</td>
+                  <td>{{ row.system_used }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.setup_name }}</td>
+                  <td>{{ row.score }}</td>
+                  <td>{{ row.summary }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       {% endif %}
     </section>
@@ -593,11 +673,13 @@ def index():
     error = None
     is_trade = False
     image_result = None
+    image_preview = None
     snapshot = None
     checklist_items = []
     upas_analysis = None
     summary_details = []
     why_no_trade = []
+    live_status = None
 
     if request.method == "POST":
         try:
@@ -605,6 +687,10 @@ def index():
             chart_image = request.files.get("chart_image")
             has_ohlc = bool(ohlc_file and ohlc_file.filename)
             has_image = bool(chart_image and chart_image.filename)
+            image_bytes = None
+            if has_image:
+                image_bytes = chart_image.read()
+                image_preview = build_image_preview(image_bytes, chart_image.mimetype or "image/png")
 
             risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
             settings = RiskSettings(
@@ -616,6 +702,7 @@ def index():
             if form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
+                    live_status = build_live_status([mn1_data, w1_data, d1_data, h4_data, h1_data])
                 elif has_ohlc:
                     loader = DataLoader()
                     multi = loader.load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
@@ -628,7 +715,7 @@ def index():
                     h4_data = multi["H4"]
                     h1_data = multi["H1"]
                 elif has_image:
-                    image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
+                    image_result = ImageInputValidator().validate(BytesIO(image_bytes or b""), chart_image.filename)
                     mn1_data = w1_data = d1_data = h4_data = h1_data = None
                 else:
                     error = "UPAS requires one OHLC CSV containing MN1, W1, D1, H4, and H1 rows, or live data mode."
@@ -648,8 +735,10 @@ def index():
                     output = upas_analysis.summary
                     summary_details = build_upas_summary(upas_analysis)
                     why_no_trade = build_upas_why_no_trade(upas_analysis)
+                    save_upas_history(upas_analysis)
             elif form["data_source"] == "live":
                 h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
+                live_status = build_live_status([h4_data, h1_data])
                 agent = SmartSystemAAgent()
                 snapshot = agent.analyze_with_snapshot(h4_data, h1_data, AccountSettings(float(form["balance"])), settings)
                 result = snapshot.result
@@ -660,6 +749,7 @@ def index():
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
+                save_ssa_history(snapshot)
             elif has_ohlc:
                 loader = DataLoader()
                 multi = loader.load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
@@ -678,8 +768,9 @@ def index():
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
                     is_trade = False
+                save_ssa_history(snapshot)
             elif has_image:
-                image_result = ImageInputValidator().validate(chart_image.stream, chart_image.filename)
+                image_result = ImageInputValidator().validate(BytesIO(image_bytes or b""), chart_image.filename)
             else:
                 error = "Upload one OHLC CSV file, use live data mode, or upload a chart screenshot for image intake."
         except Exception as exc:
@@ -693,11 +784,14 @@ def index():
         error=error,
         is_trade=is_trade,
         image_result=image_result,
+        image_preview=image_preview,
         snapshot=snapshot,
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
         summary_details=summary_details,
         why_no_trade=why_no_trade,
+        live_status=live_status,
+        history=recent_history(),
     )
 
 
@@ -785,6 +879,51 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
     if payload["reasoning"]:
         details.append({"title": "Next Requirement", "detail": payload["reasoning"]})
     return details
+
+
+def build_image_preview(image_bytes: bytes, mimetype: str) -> dict[str, str]:
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return {"data_url": f"data:{mimetype};base64,{encoded}"}
+
+
+def build_live_status(datasets: list[object]) -> dict[str, object]:
+    candles = [candle for data in datasets for candle in data.candles]
+    last_candle_time = candles[-1].timestamp if candles else "n/a"
+    volume_present = bool(candles) and all(candle.volume is not None for candle in candles)
+    timeframe_counts = ", ".join(f"{data.timeframe}: {len(data.candles)}" for data in datasets)
+    return {
+        "provider": "Twelve Data",
+        "status": "Loaded",
+        "last_candle_time": last_candle_time,
+        "total_candles": f"{len(candles)} ({timeframe_counts})",
+        "volume_status": "Present" if volume_present else "Missing or partial",
+    }
+
+
+def save_ssa_history(snapshot: AnalysisSnapshot) -> None:
+    result = snapshot.result
+    if isinstance(result, TradeSetup):
+        status = "VALID_TRADE"
+        setup_name = result.setup_type
+        score = "6/6"
+        summary = result.reasoning_summary
+    else:
+        status = "NO_TRADE"
+        setup_name = "None"
+        score = f"{6 - len(result.failed_rules)}/6"
+        summary = result.reasoning_summary
+    add_history("Smart System A", status, setup_name, score, summary)
+
+
+def save_upas_history(upas_analysis: UPASAnalysis) -> None:
+    payload = upas_analysis.payload
+    add_history(
+        "UPAS Trade Assistant",
+        payload["status"],
+        payload["setup"]["name"],
+        f"{payload['setup']['confluence_score']}/5",
+        payload["summary"],
+    )
 
 
 if __name__ == "__main__":

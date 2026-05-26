@@ -4,7 +4,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from web_app import app
+from web_app import app, build_live_status
 from tests.conftest import _bullish_h1, _bullish_h4
 from tests.test_upas_agent import h1_confirmation, h4_last_kiss, trend_data
 
@@ -35,6 +35,8 @@ def test_image_upload_returns_image_intake_no_setup() -> None:
 
     assert response.status_code == 200
     assert b"Image Accepted - No Setup" in response.data
+    assert b"Chart Screenshot Preview" in response.data
+    assert b"data:image/png;base64" in response.data
 
 
 def test_dashboard_sections_render_for_csv_upload() -> None:
@@ -137,3 +139,13 @@ def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:
     assert response.status_code == 200
     assert b"Why No Trade?" in response.data
     assert b"Volume supports direction" in response.data
+
+
+def test_live_status_helper_reports_candles_and_volume() -> None:
+    status = build_live_status([_bullish_h4(), _bullish_h1()])
+
+    assert status["provider"] == "Twelve Data"
+    assert status["status"] == "Loaded"
+    assert "H4: 16" in status["total_candles"]
+    assert "H1: 13" in status["total_candles"]
+    assert status["volume_status"] == "Present"
