@@ -116,6 +116,25 @@ def test_template_downloads() -> None:
     assert b"D1" in upas.data
 
 
+def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+
+    client = app.test_client()
+    response = client.post(
+        "/api/analyze",
+        json={"analysis_system": "ssa", "symbol": "XAUUSD", "ohlc_csv": text},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["analysis_system"] == "Smart System A"
+    assert "output" in payload
+
+
 def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:
     def csv_bytes() -> BytesIO:
         text = "timeframe,timestamp,open,high,low,close,volume\n"

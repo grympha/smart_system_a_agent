@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import json
 from io import BytesIO
+from io import StringIO
 from io import TextIOWrapper
 
-from flask import Flask, Response, render_template_string, request
+from flask import Flask, Response, jsonify, render_template_string, request
 
 from history_store import add_history, recent_history
 from smart_system_a.agent import SmartSystemAAgent
@@ -655,6 +657,64 @@ def download_upas_template() -> Response:
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=upas_ohlc_template.csv"},
     )
+
+
+@app.post("/api/analyze")
+def api_analyze() -> Response:
+    payload = request.get_json(silent=True) or {}
+    analysis_system = (payload.get("analysis_system") or "ssa").lower()
+    symbol = payload.get("symbol") or "XAUUSD"
+    ohlc_csv = payload.get("ohlc_csv") or ""
+    if not ohlc_csv:
+        return jsonify({"status": "ERROR", "message": "ohlc_csv is required."}), 400
+
+    try:
+        multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
+        if analysis_system == "upas":
+            missing = [tf for tf in ["MN1", "W1", "D1", "H4", "H1"] if tf not in multi]
+            if missing:
+                raise ValueError(f"UPAS OHLC data missing timeframe rows: {', '.join(missing)}")
+            upas_input = UPASInput(
+                mn1=multi["MN1"],
+                w1=multi["W1"],
+                d1=multi["D1"],
+                h4=multi["H4"],
+                h1=multi["H1"],
+            )
+            upas_analysis = UPASAgent().analyze(upas_input)
+            save_upas_history(upas_analysis)
+            return jsonify(
+                {
+                    "ok": True,
+                    "analysis_system": "UPAS Trade Assistant",
+                    "result": upas_analysis.payload,
+                    "output": upas_analysis.summary,
+                }
+            )
+
+        missing = [tf for tf in ["H4", "H1"] if tf not in multi]
+        if missing:
+            raise ValueError(f"Smart System A OHLC data missing timeframe rows: {', '.join(missing)}")
+        agent = SmartSystemAAgent()
+        snapshot = agent.analyze_with_snapshot(
+            multi["H4"],
+            multi["H1"],
+            AccountSettings(balance=100000),
+            RiskSettings(),
+        )
+        save_ssa_history(snapshot)
+        return jsonify(
+            {
+                "ok": True,
+                "analysis_system": "Smart System A",
+                "status": "VALID_TRADE" if isinstance(snapshot.result, TradeSetup) else "NO_TRADE",
+                "output": agent.format_result(snapshot.result),
+                "summary": build_ssa_summary(snapshot),
+                "why_no_trade": build_ssa_why_no_trade(snapshot),
+            }
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "status": "ERROR", "message": str(exc)}), 400
 
 
 @app.route("/", methods=["GET", "POST"])

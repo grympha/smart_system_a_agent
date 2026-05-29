@@ -88,6 +88,36 @@ On Render, add it under **Environment** for the web service. Then choose **Live 
 
 Live mode still follows the same strict Smart System A rules. If the provider returns missing volume, condition 6 fails unless volume override is explicitly enabled.
 
+## MT5 Direct OHLCV Push
+
+The `mt5/GoldSmartAgent_PushOHLC.mq5` script reads OHLCV candles from MetaTrader 5 and posts them to the web app API, so you do not need to manually upload the CSV.
+
+MT5 setup:
+
+1. Copy `mt5/GoldSmartAgent_PushOHLC.mq5` into your MT5 `MQL5/Scripts` folder.
+2. Compile it in MetaEditor.
+3. In MT5, open **Tools > Options > Expert Advisors**.
+4. Enable **Allow WebRequest for listed URL**.
+5. Add:
+
+```text
+https://smart-system-a-agent.onrender.com
+```
+
+Script inputs:
+
+```text
+InpAnalysisSystem = ssa   # H4 and H1
+InpAnalysisSystem = upas  # MN1, W1, D1, H4, H1
+InpSymbol = blank         # uses current chart symbol
+```
+
+The server endpoint is:
+
+```text
+POST /api/analyze
+```
+
 ## Deploy Online
 
 This project is ready for a Python web host that supports WSGI apps, such as Render, Railway, Fly.io, or Heroku-style platforms.
