@@ -1045,9 +1045,96 @@ def history_detail(item_id: int) -> Response:
                     <div class="summary-row"><dt>Summary</dt><dd>{{ item.summary }}</dd></div>
                   </dl>
                 </div>
+                {% if item.system_used == "Smart System A" and item.detail %}
+                  <div class="dashboard">
+                    <div class="dashboard-grid">
+                      <div class="panel">
+                        <h2 class="panel-title">H4 Trend And Wave</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Trend</span>{{ item.detail.h4.trend }}</div>
+                          <div class="metric"><span>Wave</span>{{ item.detail.h4.wave_context }}</div>
+                          <div class="metric"><span>Active Wave</span>{{ item.detail.h4.active_wave or "Unclear" }}</div>
+                          <div class="metric"><span>State</span>{{ item.detail.h4.market_state }}</div>
+                        </div>
+                      </div>
+                      <div class="panel">
+                        <h2 class="panel-title">H1 Structure And Entry</h2>
+                        <div class="grid">
+                          <div class="metric"><span>BOS</span>{{ item.detail.h1.bos_direction }}</div>
+                          <div class="metric"><span>BOS Level</span>{{ item.detail.h1.bos_level or "None" }}</div>
+                          <div class="metric"><span>Breakout</span>{{ item.detail.h1.breakout_strength }}</div>
+                          <div class="metric"><span>Entry Zone</span>{{ item.detail.h1.entry_zone or "Invalid" }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="panel">
+                      <h2 class="panel-title">Six-Condition SSA Checklist</h2>
+                      <ul class="checklist">
+                        <li><span>H4 trend aligned</span><span class="pill {{ 'pass' if item.detail.checklist.condition_1_h4_trend_aligned else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_1_h4_trend_aligned else 'FAIL' }}</span></li>
+                        <li><span>Correct Elliott Wave position</span><span class="pill {{ 'pass' if item.detail.checklist.condition_2_wave_position_correct else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_2_wave_position_correct else 'FAIL' }}</span></li>
+                        <li><span>Clean H1 breakout structure</span><span class="pill {{ 'pass' if item.detail.checklist.condition_3_clean_breakout else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_3_clean_breakout else 'FAIL' }}</span></li>
+                        <li><span>Pullback reaches the correct SSA zone</span><span class="pill {{ 'pass' if item.detail.checklist.condition_4_pullback_reaches_zone else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_4_pullback_reaches_zone else 'FAIL' }}</span></li>
+                        <li><span>Valid candle confirmation or rejection behavior</span><span class="pill {{ 'pass' if item.detail.checklist.condition_5_valid_candle_behavior else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_5_valid_candle_behavior else 'FAIL' }}</span></li>
+                        <li><span>Volume supports direction</span><span class="pill {{ 'pass' if item.detail.checklist.condition_6_volume_supports_direction else 'fail' }}">{{ 'PASS' if item.detail.checklist.condition_6_volume_supports_direction else 'FAIL' }}</span></li>
+                      </ul>
+                    </div>
+                  </div>
+                {% elif item.system_used == "UPAS Trade Assistant" and item.detail %}
+                  <div class="dashboard">
+                    {% if item.detail.mt5_data_status %}
+                      <div class="panel">
+                        <h2 class="panel-title">MT5 Data Status</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Provider</span>{{ item.detail.mt5_data_status.provider }}</div>
+                          <div class="metric"><span>Status</span>{{ item.detail.mt5_data_status.status }}</div>
+                          <div class="metric"><span>Total Candle</span>{{ item.detail.mt5_data_status.total_candles }}</div>
+                          <div class="metric"><span>Volume Data</span>{{ item.detail.mt5_data_status.volume_data }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    <div class="dashboard-grid">
+                      <div class="panel">
+                        <h2 class="panel-title">UPAS Market Bias</h2>
+                        <div class="grid">
+                          {% for tf, bias in item.detail.market_bias.items() %}
+                            <div class="metric"><span>{{ tf }}</span>{{ bias or "n/a" }}</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      <div class="panel">
+                        <h2 class="panel-title">UPAS Setup</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Name</span>{{ item.detail.setup.name }}</div>
+                          <div class="metric"><span>Direction</span>{{ item.detail.setup.direction }}</div>
+                          <div class="metric"><span>Score</span>{{ item.detail.setup.confluence_score }}/5</div>
+                          <div class="metric"><span>Status</span>{{ item.detail.status }}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="panel">
+                      <h2 class="panel-title">UPAS Confluence Checklist</h2>
+                      <ul class="checklist">
+                        {% for key, check in item.detail.setup.checklist.items() %}
+                          <li>
+                            <span>{{ key.replace('_', ' ').title() }} - {{ check.reason }}</span>
+                            <span class="pill {{ 'pass' if check.passed else 'fail' }}">{{ 'PASS' if check.passed else 'FAIL' }}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                    <div class="panel">
+                      <h2 class="panel-title">UPAS Trade Plan</h2>
+                      <div class="grid">
+                        {% for key, value in item.detail.trade_plan.items() %}
+                          <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
                 {% if item.detail %}
-                  <details class="raw-output" open>
-                    <summary>Stored analysis detail</summary>
+                  <details class="raw-output">
+                    <summary>Stored raw analysis detail</summary>
                     <pre>{{ detail_json }}</pre>
                   </details>
                 {% endif %}
