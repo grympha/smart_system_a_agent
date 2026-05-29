@@ -172,6 +172,22 @@ def test_history_rows_are_clickable_after_api_push() -> None:
     assert b"Stored analysis detail" in detail.data
 
 
+def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+
+    client = app.test_client()
+    client.post("/api/analyze", json={"analysis_system": "ssa", "symbol": "XAUUSD", "ohlc_csv": text})
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "ssa"})
+
+    assert response.status_code == 200
+    assert b"Latest MT5 Result - Smart System A" in response.data
+    assert b"MT5 SSA H4 Trend And Wave" in response.data
+    assert b"MT5 SSA Checklist" in response.data
+
+
 def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:
     def csv_bytes() -> BytesIO:
         text = "timeframe,timestamp,open,high,low,close,volume\n"
