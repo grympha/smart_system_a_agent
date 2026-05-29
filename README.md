@@ -92,22 +92,30 @@ Live mode still follows the same strict Smart System A rules. If the provider re
 
 The `mt5/GoldSmartAgent_PushOHLC.mq5` script reads OHLCV candles from MetaTrader 5 and posts them to the web app API, so you do not need to manually upload the CSV.
 
-For automatic pushing every 5 minutes, use the Expert Advisor:
+For website-requested MT5 pushing, use the Expert Advisor:
 
 ```text
 mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5
 ```
 
-It pushes both systems automatically:
+It polls the website for pending MT5 Direct Mode requests and pushes only the system selected on the website:
 
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
 
-Default interval:
+Default poll interval:
 
 ```text
-InpPushIntervalSeconds = 300
+InpPushIntervalSeconds = 10
 ```
+
+Workflow:
+
+1. Keep the EA attached to your XAUUSD chart.
+2. On the website, choose `Smart System A` or `UPAS Trade Assistant`.
+3. Choose `MT5 Direct Mode`.
+4. Click `Run Analysis`.
+5. The EA picks up the request, reads MT5 OHLCV, and pushes the selected system only.
 
 MT5 setup:
 

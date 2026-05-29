@@ -9,6 +9,7 @@ from io import TextIOWrapper
 from flask import Flask, Response, jsonify, render_template_string, request
 
 from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
+from mt5_requests import consume_next_mt5_request, create_mt5_request
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -393,11 +394,13 @@ PAGE = """
     }
     @media (max-width: 860px) {
       main { grid-template-columns: 1fr; }
-      form { border-right: 0; border-bottom: 1px solid var(--line); }
-      .grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+      form { border-right: 0; border-bottom: 1px solid var(--line); padding: 18px; }
+      .workspace { padding: 16px; }
+      .grid { grid-template-columns: 1fr; }
       .dashboard-grid { grid-template-columns: 1fr; }
       .summary-row { grid-template-columns: 1fr; gap: 4px; }
       .quick-actions { grid-template-columns: 1fr; }
+      .history-table { display: block; overflow-x: auto; white-space: nowrap; }
       header { align-items: flex-start; flex-direction: column; }
     }
   </style>
@@ -447,7 +450,7 @@ PAGE = """
       {% elif mt5_waiting %}
         <div class="result">
           <div class="status">Waiting for MT5 data</div>
-          <p class="muted">Run the MT5 script to push fresh OHLCV data into Gold Smart Agent, then refresh this page.</p>
+          <p class="muted">Request sent for {{ requested_mt5_system }}. Keep the MT5 on-demand EA running; it will collect the request and push fresh OHLCV data.</p>
           {% if latest_mt5_results %}
             {% for item in latest_mt5_results %}
               <div class="decision-summary">
@@ -888,6 +891,7 @@ def index():
     live_status = None
     mt5_waiting = False
     latest_mt5_results = []
+    requested_mt5_system = None
 
     if request.method == "POST":
         try:
@@ -910,6 +914,8 @@ def index():
             if form["data_source"] == "mt5":
                 mt5_waiting = True
                 selected_system = "UPAS Trade Assistant" if form["analysis_system"] == "upas" else "Smart System A"
+                requested_mt5_system = selected_system
+                create_mt5_request(form["analysis_system"])
                 latest = latest_history("mt5", selected_system)
                 latest_mt5_results = [latest] if latest else []
             elif form["analysis_system"] == "upas":
@@ -1007,6 +1013,7 @@ def index():
         history=recent_history(),
         mt5_waiting=mt5_waiting,
         latest_mt5_results=latest_mt5_results,
+        requested_mt5_system=requested_mt5_system,
     )
 
 
@@ -1154,6 +1161,14 @@ def history_detail(item_id: int) -> Response:
         item=item,
         detail_json=json.dumps(item["detail"], indent=2),
     )
+
+
+@app.get("/api/mt5/next-request")
+def api_mt5_next_request() -> Response:
+    request_item = consume_next_mt5_request()
+    if not request_item:
+        return Response("none", mimetype="text/plain")
+    return Response(str(request_item["analysis_system"]), mimetype="text/plain")
 
 
 def build_checklist_items(snapshot: AnalysisSnapshot) -> list[dict[str, object]]:

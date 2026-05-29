@@ -6,11 +6,12 @@
 #property strict
 
 input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
+input string InpRequestEndpoint = "https://smart-system-a-agent.onrender.com/api/mt5/next-request";
 input string InpSymbol = "";            // blank = current chart symbol
 input int    InpBarsPerTimeframe = 120;
-input int    InpPushIntervalSeconds = 300;
+input int    InpPushIntervalSeconds = 10;
 input int    InpTimeoutMs = 15000;
-input bool   InpPushOnStart = true;
+input bool   InpPushOnStart = false;
 input bool   InpPingBeforePush = true;
 
 datetime g_last_push_time = 0;
@@ -175,6 +176,64 @@ void PushBothSystems()
    Print("Gold Smart Agent: push cycle complete. SSA=", ssa_ok, " UPAS=", upas_ok);
 }
 
+string FetchNextRequest()
+{
+   uchar post[];
+   uchar result[];
+   string result_headers;
+   string headers = "";
+
+   ResetLastError();
+   int status = WebRequest("GET", InpRequestEndpoint, headers, InpTimeoutMs, post, result, result_headers);
+   if(status == -1)
+   {
+      Print("Gold Smart Agent: request poll failed. Error: ", GetLastError());
+      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: https://smart-system-a-agent.onrender.com");
+      return "none";
+   }
+
+   string response = CharArrayToString(result, 0, -1, CP_UTF8);
+   StringTrimLeft(response);
+   StringTrimRight(response);
+   StringToLower(response);
+   return response;
+}
+
+void PollAndPushRequestedSystem()
+{
+   string requested = FetchNextRequest();
+   if(requested == "none" || requested == "")
+   {
+      Print("Gold Smart Agent: no pending MT5 request.");
+      return;
+   }
+
+   string symbol = InpSymbol;
+   if(symbol == "")
+      symbol = _Symbol;
+
+   g_push_count++;
+   g_last_push_time = TimeCurrent();
+   Print("Gold Smart Agent: request #", g_push_count, " received: ", requested);
+
+   if(InpPingBeforePush)
+      PingServer();
+
+   if(requested == "ssa")
+   {
+      PushAnalysis(symbol, "ssa");
+      return;
+   }
+
+   if(requested == "upas")
+   {
+      PushAnalysis(symbol, "upas");
+      return;
+   }
+
+   Print("Gold Smart Agent: unknown request value: ", requested);
+}
+
 int OnInit()
 {
    int interval = InpPushIntervalSeconds;
@@ -182,10 +241,11 @@ int OnInit()
       interval = 60;
 
    EventSetTimer(interval);
-   Print("Gold Smart Agent Auto Push EA started. Interval seconds: ", interval);
+   Print("Gold Smart Agent On-Demand Push EA started. Poll interval seconds: ", interval);
    Print("Gold Smart Agent Auto Push EA endpoint: ", InpEndpoint);
+   Print("Gold Smart Agent Auto Push EA request endpoint: ", InpRequestEndpoint);
    Print("Gold Smart Agent Auto Push EA symbol: ", (InpSymbol == "" ? _Symbol : InpSymbol));
-   Print("Gold Smart Agent Auto Push EA pushes BOTH systems every timer event.");
+   Print("Gold Smart Agent Auto Push EA waits for website requests and pushes only the selected system.");
 
    if(InpPushOnStart)
       PushBothSystems();
@@ -201,5 +261,5 @@ void OnDeinit(const int reason)
 
 void OnTimer()
 {
-   PushBothSystems();
+   PollAndPushRequestedSystem();
 }

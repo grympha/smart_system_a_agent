@@ -157,6 +157,16 @@ def test_mt5_direct_mode_shows_waiting_panel() -> None:
     assert b"No MT5 push has been received yet" in response.data or b"Latest MT5 Result" in response.data
 
 
+def test_mt5_direct_mode_creates_on_demand_request() -> None:
+    client = app.test_client()
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "upas"})
+    request_response = client.get("/api/mt5/next-request")
+
+    assert response.status_code == 200
+    assert request_response.status_code == 200
+    assert request_response.data in {b"upas", b"ssa"}
+
+
 def test_history_rows_are_clickable_after_api_push() -> None:
     text = "timeframe,timestamp,open,high,low,close,volume\n"
     for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
