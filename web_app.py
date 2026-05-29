@@ -46,11 +46,17 @@ PAGE = """
       --shell: #070b12;
     }
     * { box-sizing: border-box; }
+    html {
+      width: 100%;
+      overflow-x: hidden;
+    }
     body {
       margin: 0;
       font-family: Arial, Helvetica, sans-serif;
       color: var(--ink);
       background: radial-gradient(circle at top left, #1d2636 0, #070b12 34%, #05070c 100%);
+      width: 100%;
+      overflow-x: hidden;
     }
     header {
       background: var(--paper);
@@ -87,11 +93,14 @@ PAGE = """
       display: grid;
       grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
       min-height: calc(100vh - 67px);
+      width: 100%;
+      min-width: 0;
     }
     form {
       background: var(--paper);
       border-right: 1px solid var(--line);
       padding: 24px;
+      min-width: 0;
     }
     fieldset {
       border: 0;
@@ -110,12 +119,18 @@ PAGE = """
     }
     input, select {
       width: 100%;
+      max-width: 100%;
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 10px 11px;
       font-size: 14px;
       background: #0f1726;
       color: var(--ink);
+    }
+    input[type="file"] {
+      min-width: 0;
+      font-size: 13px;
+      overflow: hidden;
     }
     input[type="checkbox"] {
       width: auto;
@@ -142,6 +157,7 @@ PAGE = """
       display: grid;
       gap: 18px;
       align-content: start;
+      min-width: 0;
     }
     .result, .panel {
       background: var(--paper);
@@ -149,6 +165,7 @@ PAGE = """
       border-radius: 8px;
       padding: 20px;
       box-shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+      min-width: 0;
     }
     .status {
       font-weight: 700;
@@ -168,6 +185,7 @@ PAGE = """
       padding: 10px;
       min-height: 68px;
       background: var(--panel);
+      overflow-wrap: anywhere;
     }
     .metric span {
       display: block;
@@ -243,6 +261,7 @@ PAGE = """
       border-radius: 6px;
       padding: 9px 10px;
       background: var(--panel);
+      min-width: 0;
     }
     .pill {
       border-radius: 999px;
@@ -357,6 +376,7 @@ PAGE = """
       padding: 10px 8px;
       text-align: left;
       vertical-align: top;
+      overflow-wrap: anywhere;
     }
     .history-table th {
       color: var(--muted);
@@ -400,8 +420,107 @@ PAGE = """
       .dashboard-grid { grid-template-columns: 1fr; }
       .summary-row { grid-template-columns: 1fr; gap: 4px; }
       .quick-actions { grid-template-columns: 1fr; }
-      .history-table { display: block; overflow-x: auto; white-space: nowrap; }
       header { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 640px) {
+      header {
+        padding: 18px 20px;
+        gap: 10px;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      .badge {
+        white-space: normal;
+        line-height: 1.35;
+      }
+      form {
+        padding: 16px 14px;
+      }
+      fieldset {
+        margin-bottom: 18px;
+      }
+      label {
+        margin-top: 12px;
+      }
+      input, select, button {
+        min-height: 44px;
+        font-size: 16px;
+      }
+      input[type="file"] {
+        padding: 9px;
+        font-size: 14px;
+      }
+      button {
+        margin-top: 6px;
+      }
+      .workspace {
+        padding: 14px;
+        gap: 14px;
+      }
+      .result, .panel, .decision-summary, .why-panel {
+        padding: 16px;
+        border-radius: 8px;
+      }
+      .quick-actions {
+        grid-template-columns: 1fr;
+      }
+      .quick-actions a {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .field-help:hover::after,
+      .field-help:focus::after {
+        left: auto;
+        right: -8px;
+        top: 24px;
+        width: min(280px, calc(100vw - 42px));
+      }
+      .checklist li {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .pill {
+        align-self: flex-start;
+      }
+      .history-table,
+      .history-table thead,
+      .history-table tbody,
+      .history-table tr,
+      .history-table td {
+        display: block;
+        width: 100%;
+      }
+      .history-table thead {
+        display: none;
+      }
+      .history-table tr {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        margin-bottom: 12px;
+        padding: 10px;
+      }
+      .history-table td {
+        border: 0;
+        padding: 8px 0;
+      }
+      .history-table td::before {
+        content: attr(data-label);
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .history-table td:last-child {
+        line-height: 1.45;
+      }
+      footer {
+        padding: 14px 20px;
+      }
     }
   </style>
 </head>
@@ -753,12 +872,12 @@ PAGE = """
             <tbody>
               {% for row in history %}
                 <tr>
-                  <td>{{ row.created_at }}</td>
-                  <td><a class="history-link" href="/history/{{ row.id }}">{{ row.system_used }}</a></td>
-                  <td>{{ row.status }}</td>
-                  <td>{{ row.setup_name }}</td>
-                  <td>{{ row.score }}</td>
-                  <td>{{ row.summary }}</td>
+                  <td data-label="Date / Time">{{ row.created_at }}</td>
+                  <td data-label="System"><a class="history-link" href="/history/{{ row.id }}">{{ row.system_used }}</a></td>
+                  <td data-label="Status">{{ row.status }}</td>
+                  <td data-label="Setup">{{ row.setup_name }}</td>
+                  <td data-label="Score">{{ row.score }}</td>
+                  <td data-label="Summary">{{ row.summary }}</td>
                 </tr>
               {% endfor %}
             </tbody>

@@ -178,6 +178,8 @@ def test_history_rows_are_clickable_after_api_push() -> None:
     home = client.get("/")
 
     assert b"/history/" in home.data
+    assert b'data-label="Date / Time"' in home.data
+    assert b'data-label="Summary"' in home.data
 
     marker = b'href="/history/'
     start = home.data.find(marker)
