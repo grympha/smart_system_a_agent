@@ -11,6 +11,10 @@ input int    InpBarsPerTimeframe = 120;
 input int    InpPushIntervalSeconds = 300;
 input int    InpTimeoutMs = 15000;
 input bool   InpPushOnStart = true;
+input bool   InpPingBeforePush = true;
+
+datetime g_last_push_time = 0;
+int      g_push_count = 0;
 
 string EscapeJson(string value)
 {
@@ -129,15 +133,46 @@ bool PushAnalysis(string symbol, string analysis_system)
    return (status >= 200 && status < 300);
 }
 
+bool PingServer()
+{
+   string ping_url = "https://smart-system-a-agent.onrender.com/api/ping";
+   uchar post[];
+   uchar result[];
+   string result_headers;
+   string headers = "";
+
+   ResetLastError();
+   int status = WebRequest("GET", ping_url, headers, InpTimeoutMs, post, result, result_headers);
+   if(status == -1)
+   {
+      Print("Gold Smart Agent: ping failed. Error: ", GetLastError());
+      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: https://smart-system-a-agent.onrender.com");
+      return false;
+   }
+
+   string response = CharArrayToString(result, 0, -1, CP_UTF8);
+   Print("Gold Smart Agent: ping HTTP status: ", status, " response: ", response);
+   return (status >= 200 && status < 300);
+}
+
 void PushBothSystems()
 {
    string symbol = InpSymbol;
    if(symbol == "")
       symbol = _Symbol;
 
-   Print("Gold Smart Agent: pushing SSA and UPAS for ", symbol);
-   PushAnalysis(symbol, "ssa");
-   PushAnalysis(symbol, "upas");
+   g_push_count++;
+   g_last_push_time = TimeCurrent();
+
+   Print("Gold Smart Agent: push cycle #", g_push_count, " at ", TimeToString(g_last_push_time, TIME_DATE | TIME_SECONDS));
+   Print("Gold Smart Agent: pushing SSA and UPAS for ", symbol, ". Interval seconds: ", InpPushIntervalSeconds);
+
+   if(InpPingBeforePush)
+      PingServer();
+
+   bool ssa_ok = PushAnalysis(symbol, "ssa");
+   bool upas_ok = PushAnalysis(symbol, "upas");
+   Print("Gold Smart Agent: push cycle complete. SSA=", ssa_ok, " UPAS=", upas_ok);
 }
 
 int OnInit()
@@ -148,6 +183,9 @@ int OnInit()
 
    EventSetTimer(interval);
    Print("Gold Smart Agent Auto Push EA started. Interval seconds: ", interval);
+   Print("Gold Smart Agent Auto Push EA endpoint: ", InpEndpoint);
+   Print("Gold Smart Agent Auto Push EA symbol: ", (InpSymbol == "" ? _Symbol : InpSymbol));
+   Print("Gold Smart Agent Auto Push EA pushes BOTH systems every timer event.");
 
    if(InpPushOnStart)
       PushBothSystems();

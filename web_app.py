@@ -837,6 +837,11 @@ def api_analyze() -> Response:
         return jsonify({"ok": False, "status": "ERROR", "message": str(exc)}), 400
 
 
+@app.get("/api/ping")
+def api_ping() -> Response:
+    return jsonify({"ok": True, "status": "READY", "service": "Gold Smart Agent"})
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     form = {

@@ -21,6 +21,14 @@ def test_home_page_loads() -> None:
     assert b"UPAS CSV Template" in response.data
 
 
+def test_api_ping() -> None:
+    client = app.test_client()
+    response = client.get("/api/ping")
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "READY"
+
+
 def test_image_upload_returns_image_intake_no_setup() -> None:
     buffer = BytesIO()
     Image.new("RGB", (320, 180), color="white").save(buffer, format="PNG")
