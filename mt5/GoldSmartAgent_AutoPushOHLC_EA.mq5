@@ -75,16 +75,37 @@ bool BuildCsv(string symbol, string analysis_system, int bars, string &csv)
 
    if(system == "upas")
    {
-      if(!AppendRates(symbol, PERIOD_MN1, bars, csv)) return false;
-      if(!AppendRates(symbol, PERIOD_W1, bars, csv))  return false;
-      if(!AppendRates(symbol, PERIOD_D1, bars, csv))  return false;
-      if(!AppendRates(symbol, PERIOD_H4, bars, csv))  return false;
-      if(!AppendRates(symbol, PERIOD_H1, bars, csv))  return false;
+      if(AppendRates(symbol, PERIOD_MN1, bars, csv) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_W1, bars, csv) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_D1, bars, csv) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_H4, bars, csv) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_H1, bars, csv) == false)
+      {
+         return false;
+      }
       return true;
    }
 
-   if(!AppendRates(symbol, PERIOD_H4, bars, csv)) return false;
-   if(!AppendRates(symbol, PERIOD_H1, bars, csv)) return false;
+   if(AppendRates(symbol, PERIOD_H4, bars, csv) == false)
+   {
+      return false;
+   }
+   if(AppendRates(symbol, PERIOD_H1, bars, csv) == false)
+   {
+      return false;
+   }
    return true;
 }
 
