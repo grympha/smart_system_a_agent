@@ -60,10 +60,19 @@ PAGE = """
       justify-content: space-between;
       gap: 16px;
     }
+    .brand-block {
+      display: grid;
+      gap: 4px;
+    }
     h1 {
       margin: 0;
       font-size: 24px;
       letter-spacing: 0;
+    }
+    .brand-subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
     }
     .badge {
       border: 1px solid var(--line);
@@ -352,6 +361,14 @@ PAGE = """
       color: var(--muted);
       font-weight: 700;
     }
+    footer {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      padding: 14px 30px;
+      font-size: 13px;
+    }
     .history-link {
       color: var(--accent);
       text-decoration: none;
@@ -387,7 +404,10 @@ PAGE = """
 </head>
 <body>
   <header>
-    <h1>Gold Smart Agent</h1>
+    <div class="brand-block">
+      <h1>Gold Smart Agent</h1>
+      <p class="brand-subtitle">Developed by Grympha</p>
+    </div>
     <div class="badge">XAUUSD rule-based analysis only</div>
   </header>
   <main>
@@ -743,6 +763,7 @@ PAGE = """
         </div>
       {% endif %}
     </section>
+    <footer>© 2026 Grympha.</footer>
   </main>
   <script>
     const dataSource = document.getElementById("data_source");

@@ -15,6 +15,8 @@ def test_home_page_loads() -> None:
 
     assert response.status_code == 200
     assert b"Gold Smart Agent" in response.data
+    assert b"Developed by Grympha" in response.data
+    assert b"2026 Grympha" in response.data
     assert b"Run Analysis" in response.data
     assert b"Risk Settings" not in response.data
     assert b"SSA CSV Template" in response.data
