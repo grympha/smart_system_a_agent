@@ -16,6 +16,7 @@ input bool   InpPingBeforePush = true;
 
 datetime g_last_push_time = 0;
 int      g_push_count = 0;
+string   g_csv = "";
 
 string EscapeJson(string value)
 {
@@ -41,7 +42,7 @@ string TimeframeName(ENUM_TIMEFRAMES timeframe)
    return EnumToString(timeframe);
 }
 
-bool AppendRates(string symbol, ENUM_TIMEFRAMES timeframe, int bars, string &csv)
+bool AppendRates(string symbol, ENUM_TIMEFRAMES timeframe, int bars)
 {
    MqlRates rates[];
    ArraySetAsSeries(rates, false);
@@ -53,56 +54,64 @@ bool AppendRates(string symbol, ENUM_TIMEFRAMES timeframe, int bars, string &csv
    }
 
    string tf = TimeframeName(timeframe);
-   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   int digits = _Digits;
    for(int i = 0; i < copied; i++)
    {
-      csv += tf + ",";
-      csv += TimeToString(rates[i].time, TIME_DATE | TIME_MINUTES) + ",";
-      csv += DoubleToString(rates[i].open, digits) + ",";
-      csv += DoubleToString(rates[i].high, digits) + ",";
-      csv += DoubleToString(rates[i].low, digits) + ",";
-      csv += DoubleToString(rates[i].close, digits) + ",";
-      csv += IntegerToString((long)rates[i].tick_volume) + "\n";
+      string candle_time = TimeToString(rates[i].time, TIME_DATE) + " " + TimeToString(rates[i].time, TIME_MINUTES);
+      string open_price = DoubleToString(rates[i].open, digits);
+      string high_price = DoubleToString(rates[i].high, digits);
+      string low_price = DoubleToString(rates[i].low, digits);
+      string close_price = DoubleToString(rates[i].close, digits);
+      string candle_volume = IntegerToString(rates[i].tick_volume);
+      string row = "";
+      row = row + tf + ",";
+      row = row + candle_time + ",";
+      row = row + open_price + ",";
+      row = row + high_price + ",";
+      row = row + low_price + ",";
+      row = row + close_price + ",";
+      row = row + candle_volume + CharToString(10);
+      g_csv = g_csv + row;
    }
    return true;
 }
 
-bool BuildCsv(string symbol, string analysis_system, int bars, string &csv)
+bool BuildCsv(string symbol, string analysis_system, int bars)
 {
-   csv = "timeframe,timestamp,open,high,low,close,volume\n";
+   g_csv = "timeframe,timestamp,open,high,low,close,volume" + CharToString(10);
    string system = analysis_system;
    StringToLower(system);
 
    if(system == "upas")
    {
-      if(AppendRates(symbol, PERIOD_MN1, bars, csv) == false)
+      if(AppendRates(symbol, PERIOD_MN1, bars) == false)
       {
          return false;
       }
-      if(AppendRates(symbol, PERIOD_W1, bars, csv) == false)
+      if(AppendRates(symbol, PERIOD_W1, bars) == false)
       {
          return false;
       }
-      if(AppendRates(symbol, PERIOD_D1, bars, csv) == false)
+      if(AppendRates(symbol, PERIOD_D1, bars) == false)
       {
          return false;
       }
-      if(AppendRates(symbol, PERIOD_H4, bars, csv) == false)
+      if(AppendRates(symbol, PERIOD_H4, bars) == false)
       {
          return false;
       }
-      if(AppendRates(symbol, PERIOD_H1, bars, csv) == false)
+      if(AppendRates(symbol, PERIOD_H1, bars) == false)
       {
          return false;
       }
       return true;
    }
 
-   if(AppendRates(symbol, PERIOD_H4, bars, csv) == false)
+   if(AppendRates(symbol, PERIOD_H4, bars) == false)
    {
       return false;
    }
-   if(AppendRates(symbol, PERIOD_H1, bars, csv) == false)
+   if(AppendRates(symbol, PERIOD_H1, bars) == false)
    {
       return false;
    }
@@ -111,8 +120,7 @@ bool BuildCsv(string symbol, string analysis_system, int bars, string &csv)
 
 bool PushAnalysis(string symbol, string analysis_system)
 {
-   string csv;
-   if(!BuildCsv(symbol, analysis_system, InpBarsPerTimeframe, csv))
+   if(BuildCsv(symbol, analysis_system, InpBarsPerTimeframe) == false)
    {
       Print("Gold Smart Agent: failed to build ", analysis_system, " OHLCV CSV.");
       return false;
@@ -122,7 +130,7 @@ bool PushAnalysis(string symbol, string analysis_system)
    string body = "{";
    body += quote + "analysis_system" + quote + ":" + quote + EscapeJson(analysis_system) + quote + ",";
    body += quote + "symbol" + quote + ":" + quote + EscapeJson(symbol) + quote + ",";
-   body += quote + "ohlc_csv" + quote + ":" + quote + EscapeJson(csv) + quote;
+   body += quote + "ohlc_csv" + quote + ":" + quote + EscapeJson(g_csv) + quote;
    body += "}";
 
    char post[];
