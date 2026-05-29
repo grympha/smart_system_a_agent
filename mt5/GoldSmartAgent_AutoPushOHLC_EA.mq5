@@ -1,17 +1,16 @@
 //+------------------------------------------------------------------+
 //| Gold Smart Agent - Auto Push OHLCV EA                            |
 //| Place in: MQL5/Experts/GoldSmartAgent_AutoPushOHLC_EA.mq5         |
-//| Polls Gold Smart Agent and pushes the selected system on demand.  |
+//| Pushes Smart System A and UPAS data every 5 minutes.              |
 //+------------------------------------------------------------------+
 #property strict
 
 input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
-input string InpRequestEndpoint = "https://smart-system-a-agent.onrender.com/api/mt5/next-request";
 input string InpSymbol = "";            // blank = current chart symbol
 input int    InpBarsPerTimeframe = 120;
-input int    InpPushIntervalSeconds = 10;
+input int    InpPushIntervalSeconds = 300;
 input int    InpTimeoutMs = 15000;
-input bool   InpPushOnStart = false;
+input bool   InpPushOnStart = true;
 input bool   InpPingBeforePush = true;
 
 datetime g_last_push_time = 0;
@@ -62,7 +61,7 @@ bool AppendRates(string symbol, ENUM_TIMEFRAMES timeframe, int bars)
       string high_price = DoubleToString(rates[i].high, digits);
       string low_price = DoubleToString(rates[i].low, digits);
       string close_price = DoubleToString(rates[i].close, digits);
-      string candle_volume = IntegerToString(rates[i].tick_volume);
+      string candle_volume = LongToString(rates[i].tick_volume);
       string row = "";
       row = row + tf + ",";
       row = row + candle_time + ",";
@@ -199,79 +198,20 @@ void PushBothSystems()
    Print("Gold Smart Agent: push cycle complete. SSA=", ssa_ok, " UPAS=", upas_ok);
 }
 
-string FetchNextRequest()
-{
-   char post[];
-   char result[];
-   string result_headers;
-   string headers = "";
-
-   ResetLastError();
-   int status = WebRequest("GET", InpRequestEndpoint, headers, InpTimeoutMs, post, result, result_headers);
-   if(status == -1)
-   {
-      Print("Gold Smart Agent: request poll failed. Error: ", GetLastError());
-      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: https://smart-system-a-agent.onrender.com");
-      return "none";
-   }
-
-   string response = CharArrayToString(result, 0, -1, CP_UTF8);
-   StringTrimLeft(response);
-   StringTrimRight(response);
-   StringToLower(response);
-   return response;
-}
-
-void PollAndPushRequestedSystem()
-{
-   string requested = FetchNextRequest();
-   if(requested == "none" || requested == "")
-   {
-      Print("Gold Smart Agent: no pending MT5 request.");
-      return;
-   }
-
-   string symbol = InpSymbol;
-   if(symbol == "")
-      symbol = _Symbol;
-
-   g_push_count++;
-   g_last_push_time = TimeCurrent();
-   Print("Gold Smart Agent: request #", g_push_count, " received: ", requested);
-
-   if(InpPingBeforePush)
-      PingServer();
-
-   if(requested == "ssa")
-   {
-      PushAnalysis(symbol, "ssa");
-      return;
-   }
-
-   if(requested == "upas")
-   {
-      PushAnalysis(symbol, "upas");
-      return;
-   }
-
-   Print("Gold Smart Agent: unknown request value: ", requested);
-}
-
 int OnInit()
 {
    int interval = InpPushIntervalSeconds;
-   if(interval < 60)
-      interval = 60;
+   if(interval < 300)
+      interval = 300;
 
    EventSetTimer(interval);
-   Print("Gold Smart Agent On-Demand Push EA started. Poll interval seconds: ", interval);
+   Print("Gold Smart Agent Auto Push EA started. Push interval seconds: ", interval);
    Print("Gold Smart Agent Auto Push EA endpoint: ", InpEndpoint);
-   Print("Gold Smart Agent Auto Push EA request endpoint: ", InpRequestEndpoint);
    string display_symbol = InpSymbol;
    if(display_symbol == "")
       display_symbol = _Symbol;
    Print("Gold Smart Agent Auto Push EA symbol: ", display_symbol);
-   Print("Gold Smart Agent Auto Push EA waits for website requests and pushes only the selected system.");
+   Print("Gold Smart Agent Auto Push EA pushes both SSA and UPAS every 5 minutes.");
 
    if(InpPushOnStart)
       PushBothSystems();
@@ -287,5 +227,5 @@ void OnDeinit(const int reason)
 
 void OnTimer()
 {
-   PollAndPushRequestedSystem();
+   PushBothSystems();
 }
