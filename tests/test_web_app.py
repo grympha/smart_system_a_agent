@@ -197,6 +197,29 @@ def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
     assert b"MYT" in response.data
     assert b"MT5 SSA H4 Trend And Wave" in response.data
     assert b"MT5 SSA Checklist" in response.data
+    assert b"Latest MT5 Result - UPAS Trade Assistant" not in response.data
+
+
+def test_mt5_direct_mode_filters_to_selected_upas_system() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [
+        ("MN1", trend_data("MN1")),
+        ("W1", trend_data("W1")),
+        ("D1", trend_data("D1")),
+        ("H4", h4_last_kiss()),
+        ("H1", h1_confirmation()),
+    ]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+
+    client = app.test_client()
+    client.post("/api/analyze", json={"analysis_system": "upas", "symbol": "XAUUSD", "ohlc_csv": text})
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "upas"})
+
+    assert response.status_code == 200
+    assert b"Latest MT5 Result - UPAS Trade Assistant" in response.data
+    assert b"MT5 UPAS Market Bias" in response.data
+    assert b"Latest MT5 Result - Smart System A" not in response.data
 
 
 def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:

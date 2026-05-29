@@ -888,14 +888,9 @@ def index():
 
             if form["data_source"] == "mt5":
                 mt5_waiting = True
-                latest_mt5_results = [
-                    item
-                    for item in [
-                        latest_history("mt5", "Smart System A"),
-                        latest_history("mt5", "UPAS Trade Assistant"),
-                    ]
-                    if item
-                ]
+                selected_system = "UPAS Trade Assistant" if form["analysis_system"] == "upas" else "Smart System A"
+                latest = latest_history("mt5", selected_system)
+                latest_mt5_results = [latest] if latest else []
             elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
