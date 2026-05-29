@@ -441,6 +441,17 @@ PAGE = """
                 </dl>
                 <p><a class="history-link" href="/history/{{ item.id }}">Open full {{ item.system_used }} result</a></p>
               </div>
+              {% if item.detail and item.detail.mt5_data_status %}
+                <div class="panel">
+                  <h2 class="panel-title">MT5 Data Status</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Provider</span>{{ item.detail.mt5_data_status.provider }}</div>
+                    <div class="metric"><span>Status</span>{{ item.detail.mt5_data_status.status }}</div>
+                    <div class="metric"><span>Total Candle</span>{{ item.detail.mt5_data_status.total_candles }}</div>
+                    <div class="metric"><span>Volume Data</span>{{ item.detail.mt5_data_status.volume_data }}</div>
+                  </div>
+                </div>
+              {% endif %}
               {% if item.system_used == "Smart System A" and item.detail %}
                 <div class="dashboard">
                   <div class="dashboard-grid">
@@ -789,7 +800,8 @@ def api_analyze() -> Response:
                 h1=multi["H1"],
             )
             upas_analysis = UPASAgent().analyze(upas_input)
-            save_upas_history(upas_analysis, source="mt5")
+            mt5_status = build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]])
+            save_upas_history(upas_analysis, source="mt5", mt5_data_status=mt5_status)
             return jsonify(
                 {
                     "ok": True,
@@ -809,7 +821,8 @@ def api_analyze() -> Response:
             AccountSettings(balance=100000),
             RiskSettings(),
         )
-        save_ssa_history(snapshot, source="mt5")
+        mt5_status = build_mt5_data_status([multi["H4"], multi["H1"]])
+        save_ssa_history(snapshot, source="mt5", mt5_data_status=mt5_status)
         return jsonify(
             {
                 "ok": True,
@@ -1140,7 +1153,11 @@ def build_live_status(datasets: list[object]) -> dict[str, object]:
     }
 
 
-def save_ssa_history(snapshot: AnalysisSnapshot, source: str = "web") -> None:
+def save_ssa_history(
+    snapshot: AnalysisSnapshot,
+    source: str = "web",
+    mt5_data_status: dict[str, object] | None = None,
+) -> None:
     result = snapshot.result
     if isinstance(result, TradeSetup):
         status = "VALID_TRADE"
@@ -1161,11 +1178,20 @@ def save_ssa_history(snapshot: AnalysisSnapshot, source: str = "web") -> None:
         "decision_summary": build_ssa_summary(snapshot),
         "why_no_trade": build_ssa_why_no_trade(snapshot),
     }
+    if mt5_data_status:
+        detail["mt5_data_status"] = mt5_data_status
     add_history("Smart System A", status, setup_name, score, summary, source=source, detail=detail, raw_output=raw_output)
 
 
-def save_upas_history(upas_analysis: UPASAnalysis, source: str = "web") -> None:
+def save_upas_history(
+    upas_analysis: UPASAnalysis,
+    source: str = "web",
+    mt5_data_status: dict[str, object] | None = None,
+) -> None:
     payload = upas_analysis.payload
+    detail = dict(payload)
+    if mt5_data_status:
+        detail["mt5_data_status"] = mt5_data_status
     add_history(
         "UPAS Trade Assistant",
         payload["status"],
@@ -1173,9 +1199,21 @@ def save_upas_history(upas_analysis: UPASAnalysis, source: str = "web") -> None:
         f"{payload['setup']['confluence_score']}/5",
         payload["summary"],
         source=source,
-        detail=payload,
+        detail=detail,
         raw_output=upas_analysis.summary,
     )
+
+
+def build_mt5_data_status(datasets: list[object]) -> dict[str, object]:
+    candles = [candle for data in datasets for candle in data.candles]
+    timeframe_counts = ", ".join(f"{data.timeframe}: {len(data.candles)}" for data in datasets)
+    volume_present = bool(candles) and all(candle.volume is not None for candle in candles)
+    return {
+        "provider": "Roboforex",
+        "status": "Last data get from MT5",
+        "total_candles": f"{len(candles)} ({timeframe_counts})",
+        "volume_data": "Present" if volume_present else "Missing or partial",
+    }
 
 
 def extract_page_styles() -> str:
