@@ -19,24 +19,15 @@ int      g_push_count = 0;
 
 string EscapeJson(string value)
 {
-   string escaped = "";
-   int length = StringLen(value);
-   for(int i = 0; i < length; i++)
-   {
-      ushort ch = StringGetCharacter(value, i);
-      if(ch == 34)       // double quote
-         escaped += "\\\"";
-      else if(ch == 92)  // backslash
-         escaped += "\\\\";
-      else if(ch == 13)  // carriage return
-         escaped += "\\r";
-      else if(ch == 10)  // line feed
-         escaped += "\\n";
-      else if(ch == 9)   // tab
-         escaped += "\\t";
-      else
-         escaped += ShortToString(ch);
-   }
+   string escaped = value;
+   string backslash = CharToString(92);
+   string quote = CharToString(34);
+
+   StringReplace(escaped, backslash, backslash + backslash);
+   StringReplace(escaped, quote, backslash + quote);
+   StringReplace(escaped, CharToString(13), backslash + "r");
+   StringReplace(escaped, CharToString(10), backslash + "n");
+   StringReplace(escaped, CharToString(9), backslash + "t");
    return escaped;
 }
 
@@ -106,10 +97,11 @@ bool PushAnalysis(string symbol, string analysis_system)
       return false;
    }
 
+   string quote = CharToString(34);
    string body = "{";
-   body += "\"analysis_system\":\"" + EscapeJson(analysis_system) + "\",";
-   body += "\"symbol\":\"" + EscapeJson(symbol) + "\",";
-   body += "\"ohlc_csv\":\"" + EscapeJson(csv) + "\"";
+   body += quote + "analysis_system" + quote + ":" + quote + EscapeJson(analysis_system) + quote + ",";
+   body += quote + "symbol" + quote + ":" + quote + EscapeJson(symbol) + quote + ",";
+   body += quote + "ohlc_csv" + quote + ":" + quote + EscapeJson(csv) + quote;
    body += "}";
 
    char post[];
