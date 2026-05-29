@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //| Gold Smart Agent - Auto Push OHLCV EA                            |
 //| Place in: MQL5/Experts/GoldSmartAgent_AutoPushOHLC_EA.mq5         |
-//| Pushes both Smart System A and UPAS data every 5 minutes.         |
+//| Polls Gold Smart Agent and pushes the selected system on demand.  |
 //+------------------------------------------------------------------+
 #property strict
 
@@ -84,15 +84,17 @@ bool BuildCsv(string symbol, string analysis_system, int bars, string &csv)
 
    if(system == "upas")
    {
-      return AppendRates(symbol, PERIOD_MN1, bars, csv)
-         && AppendRates(symbol, PERIOD_W1, bars, csv)
-         && AppendRates(symbol, PERIOD_D1, bars, csv)
-         && AppendRates(symbol, PERIOD_H4, bars, csv)
-         && AppendRates(symbol, PERIOD_H1, bars, csv);
+      if(!AppendRates(symbol, PERIOD_MN1, bars, csv)) return false;
+      if(!AppendRates(symbol, PERIOD_W1, bars, csv))  return false;
+      if(!AppendRates(symbol, PERIOD_D1, bars, csv))  return false;
+      if(!AppendRates(symbol, PERIOD_H4, bars, csv))  return false;
+      if(!AppendRates(symbol, PERIOD_H1, bars, csv))  return false;
+      return true;
    }
 
-   return AppendRates(symbol, PERIOD_H4, bars, csv)
-      && AppendRates(symbol, PERIOD_H1, bars, csv);
+   if(!AppendRates(symbol, PERIOD_H4, bars, csv)) return false;
+   if(!AppendRates(symbol, PERIOD_H1, bars, csv)) return false;
+   return true;
 }
 
 bool PushAnalysis(string symbol, string analysis_system)
@@ -110,12 +112,12 @@ bool PushAnalysis(string symbol, string analysis_system)
    body += "\"ohlc_csv\":\"" + EscapeJson(csv) + "\"";
    body += "}";
 
-   uchar post[];
+   char post[];
    StringToCharArray(body, post, 0, WHOLE_ARRAY, CP_UTF8);
    if(ArraySize(post) > 0)
       ArrayResize(post, ArraySize(post) - 1);
 
-   uchar result[];
+   char result[];
    string result_headers;
    string headers = "Content-Type: application/json\r\n";
 
@@ -137,8 +139,8 @@ bool PushAnalysis(string symbol, string analysis_system)
 bool PingServer()
 {
    string ping_url = "https://smart-system-a-agent.onrender.com/api/ping";
-   uchar post[];
-   uchar result[];
+   char post[];
+   char result[];
    string result_headers;
    string headers = "";
 
@@ -178,8 +180,8 @@ void PushBothSystems()
 
 string FetchNextRequest()
 {
-   uchar post[];
-   uchar result[];
+   char post[];
+   char result[];
    string result_headers;
    string headers = "";
 
@@ -244,7 +246,10 @@ int OnInit()
    Print("Gold Smart Agent On-Demand Push EA started. Poll interval seconds: ", interval);
    Print("Gold Smart Agent Auto Push EA endpoint: ", InpEndpoint);
    Print("Gold Smart Agent Auto Push EA request endpoint: ", InpRequestEndpoint);
-   Print("Gold Smart Agent Auto Push EA symbol: ", (InpSymbol == "" ? _Symbol : InpSymbol));
+   string display_symbol = InpSymbol;
+   if(display_symbol == "")
+      display_symbol = _Symbol;
+   Print("Gold Smart Agent Auto Push EA symbol: ", display_symbol);
    Print("Gold Smart Agent Auto Push EA waits for website requests and pushes only the selected system.");
 
    if(InpPushOnStart)
