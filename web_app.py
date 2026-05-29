@@ -8,7 +8,7 @@ from io import TextIOWrapper
 
 from flask import Flask, Response, jsonify, render_template_string, request
 
-from history_store import add_history, get_history_item, latest_history, recent_history
+from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -1215,7 +1215,7 @@ def build_mt5_data_status(datasets: list[object]) -> dict[str, object]:
     volume_present = bool(candles) and all(candle.volume is not None for candle in candles)
     return {
         "provider": "Roboforex",
-        "status": "Last data get from MT5",
+        "status": malaysia_now_text(),
         "total_candles": f"{len(candles)} ({timeframe_counts})",
         "volume_data": "Present" if volume_present else "Missing or partial",
     }

@@ -6,9 +6,15 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 DB_PATH = Path(os.getenv("ANALYSIS_HISTORY_DB", "analysis_history.db"))
+MALAYSIA_TZ = ZoneInfo("Asia/Kuala_Lumpur")
+
+
+def malaysia_now_text() -> str:
+    return datetime.now(MALAYSIA_TZ).strftime("%Y-%m-%d %H:%M:%S MYT")
 
 
 def init_history() -> None:
@@ -59,7 +65,7 @@ def add_history(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                malaysia_now_text(),
                 system_used,
                 status,
                 setup_name,
@@ -85,7 +91,7 @@ def recent_history(limit: int = 10) -> list[dict[str, Any]]:
             """,
             (limit,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [_decode_row(row) for row in rows]
 
 
 def latest_history(source: str | None = None, system_used: str | None = None) -> dict[str, Any] | None:
@@ -143,8 +149,21 @@ def get_history_item(item_id: int) -> dict[str, Any] | None:
 
 def _decode_row(row: sqlite3.Row) -> dict[str, Any]:
     item = dict(row)
+    item["created_at"] = _display_malaysia_time(item.get("created_at", ""))
     try:
         item["detail"] = json.loads(item.get("detail_json") or "{}")
     except json.JSONDecodeError:
         item["detail"] = {}
     return item
+
+
+def _display_malaysia_time(value: str) -> str:
+    if value.endswith(" MYT"):
+        return value
+    if value.endswith(" UTC"):
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+            return parsed.astimezone(MALAYSIA_TZ).strftime("%Y-%m-%d %H:%M:%S MYT")
+        except ValueError:
+            return value
+    return value

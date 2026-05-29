@@ -194,7 +194,7 @@ def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
     assert b"Latest MT5 Result - Smart System A" in response.data
     assert b"MT5 Data Status" in response.data
     assert b"Roboforex" in response.data
-    assert b"Last data get from MT5" in response.data
+    assert b"MYT" in response.data
     assert b"MT5 SSA H4 Trend And Wave" in response.data
     assert b"MT5 SSA Checklist" in response.data
 
