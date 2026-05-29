@@ -135,6 +135,42 @@ def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
     assert "output" in payload
 
 
+def test_mt5_direct_mode_shows_waiting_panel() -> None:
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={"data_source": "mt5", "analysis_system": "ssa"},
+    )
+
+    assert response.status_code == 200
+    assert b"Waiting for MT5 data" in response.data
+
+
+def test_history_rows_are_clickable_after_api_push() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+
+    client = app.test_client()
+    client.post("/api/analyze", json={"analysis_system": "ssa", "symbol": "XAUUSD", "ohlc_csv": text})
+    home = client.get("/")
+
+    assert b"/history/" in home.data
+
+    marker = b'href="/history/'
+    start = home.data.find(marker)
+    assert start != -1
+    start += len(marker)
+    end = home.data.find(b'"', start)
+    item_id = home.data[start:end].decode("ascii")
+
+    detail = client.get(f"/history/{item_id}")
+    assert detail.status_code == 200
+    assert b"Analysis History Detail" in detail.data
+    assert b"Stored analysis detail" in detail.data
+
+
 def test_why_no_trade_panel_renders_for_invalid_ssa() -> None:
     def csv_bytes() -> BytesIO:
         text = "timeframe,timestamp,open,high,low,close,volume\n"

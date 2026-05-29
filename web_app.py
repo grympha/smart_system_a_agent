@@ -8,7 +8,7 @@ from io import TextIOWrapper
 
 from flask import Flask, Response, jsonify, render_template_string, request
 
-from history_store import add_history, recent_history
+from history_store import add_history, get_history_item, latest_history, recent_history
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -352,6 +352,14 @@ PAGE = """
       color: var(--muted);
       font-weight: 700;
     }
+    .history-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .history-link:hover {
+      text-decoration: underline;
+    }
     body[data-source="live"] .csv-only {
       display: none;
     }
@@ -395,6 +403,7 @@ PAGE = """
         <select id="data_source" name="data_source">
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
           <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
+          <option value="mt5" {% if form.data_source == "mt5" %}selected{% endif %}>MT5 Direct Mode</option>
         </select>
         <div class="csv-only">
           <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. For Smart System A include H4 and H1 rows. For UPAS include MN1, W1, D1, H4, and H1 rows. Volume may be blank, but volume-based rules may fail.">!</span></label>
@@ -414,6 +423,27 @@ PAGE = """
         <div class="result">
           <div class="status no-setup">Input Error</div>
           <pre>{{ error }}</pre>
+        </div>
+      {% elif mt5_waiting %}
+        <div class="result">
+          <div class="status">Waiting for MT5 data</div>
+          <p class="muted">Run the MT5 script to push fresh OHLCV data into Gold Smart Agent, then refresh this page.</p>
+          {% if latest_mt5 %}
+            <div class="decision-summary">
+              <h2>Latest MT5 Result</h2>
+              <dl class="summary-list">
+                <div class="summary-row"><dt>Date / Time</dt><dd>{{ latest_mt5.created_at }}</dd></div>
+                <div class="summary-row"><dt>System</dt><dd>{{ latest_mt5.system_used }}</dd></div>
+                <div class="summary-row"><dt>Status</dt><dd>{{ latest_mt5.status }}</dd></div>
+                <div class="summary-row"><dt>Setup</dt><dd>{{ latest_mt5.setup_name }}</dd></div>
+                <div class="summary-row"><dt>Score</dt><dd>{{ latest_mt5.score }}</dd></div>
+                <div class="summary-row"><dt>Summary</dt><dd>{{ latest_mt5.summary }}</dd></div>
+              </dl>
+            </div>
+            <p><a class="history-link" href="/history/{{ latest_mt5.id }}">Open full MT5 result</a></p>
+          {% else %}
+            <p class="muted">No MT5 push has been received yet.</p>
+          {% endif %}
         </div>
       {% elif result %}
         <div class="result">
@@ -613,7 +643,7 @@ PAGE = """
               {% for row in history %}
                 <tr>
                   <td>{{ row.created_at }}</td>
-                  <td>{{ row.system_used }}</td>
+                  <td><a class="history-link" href="/history/{{ row.id }}">{{ row.system_used }}</a></td>
                   <td>{{ row.status }}</td>
                   <td>{{ row.setup_name }}</td>
                   <td>{{ row.score }}</td>
@@ -682,7 +712,7 @@ def api_analyze() -> Response:
                 h1=multi["H1"],
             )
             upas_analysis = UPASAgent().analyze(upas_input)
-            save_upas_history(upas_analysis)
+            save_upas_history(upas_analysis, source="mt5")
             return jsonify(
                 {
                     "ok": True,
@@ -702,7 +732,7 @@ def api_analyze() -> Response:
             AccountSettings(balance=100000),
             RiskSettings(),
         )
-        save_ssa_history(snapshot)
+        save_ssa_history(snapshot, source="mt5")
         return jsonify(
             {
                 "ok": True,
@@ -740,6 +770,8 @@ def index():
     summary_details = []
     why_no_trade = []
     live_status = None
+    mt5_waiting = False
+    latest_mt5 = None
 
     if request.method == "POST":
         try:
@@ -759,7 +791,10 @@ def index():
                 volume_override=form["volume_override"],
             )
 
-            if form["analysis_system"] == "upas":
+            if form["data_source"] == "mt5":
+                mt5_waiting = True
+                latest_mt5 = latest_history("mt5")
+            elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
                     live_status = build_live_status([mn1_data, w1_data, d1_data, h4_data, h1_data])
@@ -852,6 +887,67 @@ def index():
         why_no_trade=why_no_trade,
         live_status=live_status,
         history=recent_history(),
+        mt5_waiting=mt5_waiting,
+        latest_mt5=latest_mt5,
+    )
+
+
+@app.get("/history/<int:item_id>")
+def history_detail(item_id: int) -> Response:
+    item = get_history_item(item_id)
+    if not item:
+        return Response("History item not found.", status=404, mimetype="text/plain")
+    return render_template_string(
+        """
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Gold Smart Agent History</title>
+          <style>{{ styles }}</style>
+        </head>
+        <body>
+          <header>
+            <h1>Gold Smart Agent</h1>
+            <a class="badge" href="/">Back to dashboard</a>
+          </header>
+          <main style="display:block; min-height:calc(100vh - 67px);">
+            <section class="workspace">
+              <div class="result">
+                <div class="status {{ '' if item.status == 'VALID_TRADE' else 'no-setup' }}">{{ item.status }}</div>
+                <div class="decision-summary">
+                  <h2>Analysis History Detail</h2>
+                  <dl class="summary-list">
+                    <div class="summary-row"><dt>Date / Time</dt><dd>{{ item.created_at }}</dd></div>
+                    <div class="summary-row"><dt>System</dt><dd>{{ item.system_used }}</dd></div>
+                    <div class="summary-row"><dt>Source</dt><dd>{{ item.source }}</dd></div>
+                    <div class="summary-row"><dt>Setup</dt><dd>{{ item.setup_name }}</dd></div>
+                    <div class="summary-row"><dt>Score</dt><dd>{{ item.score }}</dd></div>
+                    <div class="summary-row"><dt>Summary</dt><dd>{{ item.summary }}</dd></div>
+                  </dl>
+                </div>
+                {% if item.detail %}
+                  <details class="raw-output" open>
+                    <summary>Stored analysis detail</summary>
+                    <pre>{{ detail_json }}</pre>
+                  </details>
+                {% endif %}
+                {% if item.raw_output %}
+                  <details class="raw-output">
+                    <summary>Raw analysis output</summary>
+                    <pre>{{ item.raw_output }}</pre>
+                  </details>
+                {% endif %}
+              </div>
+            </section>
+          </main>
+        </body>
+        </html>
+        """,
+        styles=extract_page_styles(),
+        item=item,
+        detail_json=json.dumps(item["detail"], indent=2),
     )
 
 
@@ -960,22 +1056,31 @@ def build_live_status(datasets: list[object]) -> dict[str, object]:
     }
 
 
-def save_ssa_history(snapshot: AnalysisSnapshot) -> None:
+def save_ssa_history(snapshot: AnalysisSnapshot, source: str = "web") -> None:
     result = snapshot.result
     if isinstance(result, TradeSetup):
         status = "VALID_TRADE"
         setup_name = result.setup_type
         score = "6/6"
         summary = result.reasoning_summary
+        raw_output = SmartSystemAAgent().format_result(result)
     else:
         status = "NO_TRADE"
         setup_name = "None"
         score = f"{6 - len(result.failed_rules)}/6"
         summary = result.reasoning_summary
-    add_history("Smart System A", status, setup_name, score, summary)
+        raw_output = SmartSystemAAgent().format_result(result)
+    detail = {
+        "h4": snapshot.h4.__dict__,
+        "h1": snapshot.h1.__dict__,
+        "checklist": snapshot.checklist.__dict__,
+        "decision_summary": build_ssa_summary(snapshot),
+        "why_no_trade": build_ssa_why_no_trade(snapshot),
+    }
+    add_history("Smart System A", status, setup_name, score, summary, source=source, detail=detail, raw_output=raw_output)
 
 
-def save_upas_history(upas_analysis: UPASAnalysis) -> None:
+def save_upas_history(upas_analysis: UPASAnalysis, source: str = "web") -> None:
     payload = upas_analysis.payload
     add_history(
         "UPAS Trade Assistant",
@@ -983,7 +1088,18 @@ def save_upas_history(upas_analysis: UPASAnalysis) -> None:
         payload["setup"]["name"],
         f"{payload['setup']['confluence_score']}/5",
         payload["summary"],
+        source=source,
+        detail=payload,
+        raw_output=upas_analysis.summary,
     )
+
+
+def extract_page_styles() -> str:
+    start = PAGE.find("<style>")
+    end = PAGE.find("</style>")
+    if start == -1 or end == -1:
+        return ""
+    return PAGE[start + len("<style>"):end]
 
 
 if __name__ == "__main__":
