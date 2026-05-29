@@ -428,19 +428,20 @@ PAGE = """
         <div class="result">
           <div class="status">Waiting for MT5 data</div>
           <p class="muted">Run the MT5 script to push fresh OHLCV data into Gold Smart Agent, then refresh this page.</p>
-          {% if latest_mt5 %}
-            <div class="decision-summary">
-              <h2>Latest MT5 Result</h2>
-              <dl class="summary-list">
-                <div class="summary-row"><dt>Date / Time</dt><dd>{{ latest_mt5.created_at }}</dd></div>
-                <div class="summary-row"><dt>System</dt><dd>{{ latest_mt5.system_used }}</dd></div>
-                <div class="summary-row"><dt>Status</dt><dd>{{ latest_mt5.status }}</dd></div>
-                <div class="summary-row"><dt>Setup</dt><dd>{{ latest_mt5.setup_name }}</dd></div>
-                <div class="summary-row"><dt>Score</dt><dd>{{ latest_mt5.score }}</dd></div>
-                <div class="summary-row"><dt>Summary</dt><dd>{{ latest_mt5.summary }}</dd></div>
-              </dl>
-            </div>
-            <p><a class="history-link" href="/history/{{ latest_mt5.id }}">Open full MT5 result</a></p>
+          {% if latest_mt5_results %}
+            {% for item in latest_mt5_results %}
+              <div class="decision-summary">
+                <h2>Latest MT5 Result - {{ item.system_used }}</h2>
+                <dl class="summary-list">
+                  <div class="summary-row"><dt>Date / Time</dt><dd>{{ item.created_at }}</dd></div>
+                  <div class="summary-row"><dt>Status</dt><dd>{{ item.status }}</dd></div>
+                  <div class="summary-row"><dt>Setup</dt><dd>{{ item.setup_name }}</dd></div>
+                  <div class="summary-row"><dt>Score</dt><dd>{{ item.score }}</dd></div>
+                  <div class="summary-row"><dt>Summary</dt><dd>{{ item.summary }}</dd></div>
+                </dl>
+                <p><a class="history-link" href="/history/{{ item.id }}">Open full {{ item.system_used }} result</a></p>
+              </div>
+            {% endfor %}
           {% else %}
             <p class="muted">No MT5 push has been received yet.</p>
           {% endif %}
@@ -771,7 +772,7 @@ def index():
     why_no_trade = []
     live_status = None
     mt5_waiting = False
-    latest_mt5 = None
+    latest_mt5_results = []
 
     if request.method == "POST":
         try:
@@ -793,7 +794,14 @@ def index():
 
             if form["data_source"] == "mt5":
                 mt5_waiting = True
-                latest_mt5 = latest_history("mt5")
+                latest_mt5_results = [
+                    item
+                    for item in [
+                        latest_history("mt5", "Smart System A"),
+                        latest_history("mt5", "UPAS Trade Assistant"),
+                    ]
+                    if item
+                ]
             elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
@@ -888,7 +896,7 @@ def index():
         live_status=live_status,
         history=recent_history(),
         mt5_waiting=mt5_waiting,
-        latest_mt5=latest_mt5,
+        latest_mt5_results=latest_mt5_results,
     )
 
 

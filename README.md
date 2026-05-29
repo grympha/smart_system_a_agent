@@ -92,6 +92,23 @@ Live mode still follows the same strict Smart System A rules. If the provider re
 
 The `mt5/GoldSmartAgent_PushOHLC.mq5` script reads OHLCV candles from MetaTrader 5 and posts them to the web app API, so you do not need to manually upload the CSV.
 
+For automatic pushing every 5 minutes, use the Expert Advisor:
+
+```text
+mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5
+```
+
+It pushes both systems automatically:
+
+- Smart System A: H4 and H1
+- UPAS: MN1, W1, D1, H4, and H1
+
+Default interval:
+
+```text
+InpPushIntervalSeconds = 300
+```
+
 MT5 setup:
 
 1. Copy `mt5/GoldSmartAgent_PushOHLC.mq5` into your MT5 `MQL5/Scripts` folder.

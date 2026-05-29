@@ -88,11 +88,22 @@ def recent_history(limit: int = 10) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def latest_history(source: str | None = None) -> dict[str, Any] | None:
+def latest_history(source: str | None = None, system_used: str | None = None) -> dict[str, Any] | None:
     init_history()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        if source:
+        if source and system_used:
+            row = conn.execute(
+                """
+                SELECT id, created_at, system_used, status, setup_name, score, summary, source, detail_json, raw_output
+                FROM analysis_history
+                WHERE source = ? AND system_used = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (source, system_used),
+            ).fetchone()
+        elif source:
             row = conn.execute(
                 """
                 SELECT id, created_at, system_used, status, setup_name, score, summary, source, detail_json, raw_output

@@ -144,6 +144,7 @@ def test_mt5_direct_mode_shows_waiting_panel() -> None:
 
     assert response.status_code == 200
     assert b"Waiting for MT5 data" in response.data
+    assert b"No MT5 push has been received yet" in response.data or b"Latest MT5 Result" in response.data
 
 
 def test_history_rows_are_clickable_after_api_push() -> None:
