@@ -12,12 +12,25 @@ input int    InpTimeoutMs = 15000;
 
 string EscapeJson(string value)
 {
-   StringReplace(value, "\\", "\\\\");
-   StringReplace(value, "\"", "\\\"");
-   StringReplace(value, "\r", "\\r");
-   StringReplace(value, "\n", "\\n");
-   StringReplace(value, "\t", "\\t");
-   return value;
+   string escaped = "";
+   int length = StringLen(value);
+   for(int i = 0; i < length; i++)
+   {
+      ushort ch = StringGetCharacter(value, i);
+      if(ch == 34)       // double quote
+         escaped += "\\\"";
+      else if(ch == 92)  // backslash
+         escaped += "\\\\";
+      else if(ch == 13)  // carriage return
+         escaped += "\\r";
+      else if(ch == 10)  // line feed
+         escaped += "\\n";
+      else if(ch == 9)   // tab
+         escaped += "\\t";
+      else
+         escaped += ShortToString(ch);
+   }
+   return escaped;
 }
 
 string TimeframeName(ENUM_TIMEFRAMES timeframe)
