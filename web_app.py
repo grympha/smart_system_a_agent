@@ -546,6 +546,11 @@ PAGE = """
           <option value="upas" {% if form.analysis_system == "upas" %}selected{% endif %}>UPAS Trade Assistant</option>
           <option value="wave" {% if form.analysis_system == "wave" %}selected{% endif %}>Wave Structure Analyst</option>
         </select>
+        <label for="wave_timeframe">Wave Result View</label>
+        <select id="wave_timeframe" name="wave_timeframe">
+          <option value="H4" {% if form.wave_timeframe == "H4" %}selected{% endif %}>H4 Wave Result</option>
+          <option value="H1" {% if form.wave_timeframe == "H1" %}selected{% endif %}>H1 Wave Result</option>
+        </select>
         <label for="data_source">Data Source</label>
         <select id="data_source" name="data_source">
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
@@ -596,6 +601,52 @@ PAGE = """
                     <div class="metric"><span>Status</span>{{ item.detail.mt5_data_status.status }}</div>
                     <div class="metric"><span>Total Candle</span>{{ item.detail.mt5_data_status.total_candles }}</div>
                     <div class="metric"><span>Volume Data</span>{{ item.detail.mt5_data_status.volume_data }}</div>
+                  </div>
+                </div>
+              {% endif %}
+              {% if item.detail and item.detail.trade_plan and item.detail.trade_plan.action %}
+                <div class="panel">
+                  <h2 class="panel-title">Trade Plan</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Action</span>{{ item.detail.trade_plan.action }}</div>
+                    <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan.entry_point }}</div>
+                    <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan.take_profit }}</div>
+                    <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan.stop_loss }}</div>
+                  </div>
+                </div>
+              {% elif item.detail and item.detail.trade_plan_display %}
+                <div class="panel">
+                  <h2 class="panel-title">Trade Plan</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Action</span>{{ item.detail.trade_plan_display.action }}</div>
+                    <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan_display.entry_point }}</div>
+                    <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan_display.take_profit }}</div>
+                    <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan_display.stop_loss }}</div>
+                  </div>
+                </div>
+              {% endif %}
+              {% if item.system_used == "Wave Structure Analyst" and item.detail %}
+                <div class="dashboard">
+                  {% if item.detail.timeframe_results %}
+                    <div class="panel">
+                      <h2 class="panel-title">MT5 Wave Timeframe Results</h2>
+                      <div class="grid">
+                        {% for tf, wave in item.detail.timeframe_results.items() %}
+                          <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endif %}
+                  <div class="panel">
+                    <h2 class="panel-title">MT5 Wave Structure Analyst Result</h2>
+                    <div class="grid">
+                      <div class="metric"><span>Timeframe</span>{{ item.detail.timeframe }}</div>
+                      <div class="metric"><span>Market Phase</span>{{ item.detail.market_phase }}</div>
+                      <div class="metric"><span>Primary Scenario</span>{{ item.detail.primary_scenario }}</div>
+                      <div class="metric"><span>Direction</span>{{ item.detail.direction }}</div>
+                      <div class="metric"><span>Wave Score</span>{{ item.detail.wave_score }}/10</div>
+                      <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias }}</div>
+                    </div>
                   </div>
                 </div>
               {% endif %}
@@ -703,6 +754,17 @@ PAGE = """
           {% endif %}
           {% if upas_analysis %}
             <div class="status {{ '' if upas_analysis.payload.status == 'VALID_TRADE' else 'no-setup' }}">{{ upas_analysis.payload.status }}</div>
+            {% if trade_plan %}
+              <div class="panel">
+                <h2 class="panel-title">Trade Plan</h2>
+                <div class="grid">
+                  <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
+                  <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
+                  <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
+                  <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
+                </div>
+              </div>
+            {% endif %}
             <div class="dashboard">
               <div class="dashboard-grid">
                 <div class="panel">
@@ -746,6 +808,27 @@ PAGE = """
           {% elif wave_analysis %}
             <div class="status {{ '' if wave_analysis.status == 'WAVE_CONFIRMED' else 'no-setup' }}">{{ wave_analysis.status }}</div>
             <div class="dashboard">
+              {% if wave_results and wave_results|length > 1 %}
+                <div class="panel">
+                  <h2 class="panel-title">Wave Timeframe Results</h2>
+                  <div class="grid">
+                    {% for tf, wave in wave_results.items() %}
+                      <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+              {% if trade_plan %}
+                <div class="panel">
+                  <h2 class="panel-title">Trade Plan</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
+                    <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
+                    <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
+                    <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
+                  </div>
+                </div>
+              {% endif %}
               <div class="panel">
                 <h2 class="panel-title">Wave Structure Analyst Result</h2>
                 <div class="grid">
@@ -787,6 +870,17 @@ PAGE = """
             </div>
           {% elif is_trade %}
             <div class="status">Valid SSA Setup</div>
+            {% if trade_plan %}
+              <div class="panel">
+                <h2 class="panel-title">Trade Plan</h2>
+                <div class="grid">
+                  <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
+                  <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
+                  <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
+                  <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
+                </div>
+              </div>
+            {% endif %}
             <div class="grid">
               <div class="metric"><span>Setup</span>{{ result.setup_type }}</div>
               <div class="metric"><span>Entry</span>{{ result.entry }}</div>
@@ -799,6 +893,17 @@ PAGE = """
             </div>
           {% else %}
             <div class="status no-setup">No Setup</div>
+            {% if trade_plan %}
+              <div class="panel">
+                <h2 class="panel-title">Trade Plan</h2>
+                <div class="grid">
+                  <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
+                  <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
+                  <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
+                  <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
+                </div>
+              </div>
+            {% endif %}
           {% endif %}
           {% if snapshot %}
             <div class="dashboard">
@@ -1000,16 +1105,21 @@ def api_analyze() -> Response:
                 "ssa_score": payload.get("ssa_score") or "",
                 "upas_score": payload.get("upas_score") or "",
             }
-            wave = analyze_wave_from_multi(multi, wave_form)
-            save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]))
+            wave_results = analyze_wave_results_from_multi(multi)
+            wave = select_wave_result(wave_results, wave_form)
+            trade_plan = build_wave_trade_plan(wave, multi[wave.timeframe].candles[-1].close)
+            save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]), trade_plan=trade_plan, related_results=wave_results)
             return jsonify(
                 {
                     "ok": True,
                     "analysis_system": "Wave Structure Analyst",
                     "status": wave.status,
                     "result": wave.__dict__,
+                    "results": {timeframe: result.__dict__ for timeframe, result in wave_results.items()},
+                    "selected_timeframe": wave.timeframe,
+                    "trade_plan": trade_plan,
                     "output": format_wave_result(wave),
-                    "summary": build_wave_summary(wave),
+                    "summary": build_wave_summary(wave, trade_plan),
                 }
             )
         if analysis_system == "upas":
@@ -1024,6 +1134,7 @@ def api_analyze() -> Response:
                 h1=multi["H1"],
             )
             upas_analysis = UPASAgent().analyze(upas_input)
+            trade_plan = build_upas_trade_plan(upas_analysis)
             mt5_status = build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]])
             save_upas_history(upas_analysis, source="mt5", mt5_data_status=mt5_status)
             return jsonify(
@@ -1031,6 +1142,7 @@ def api_analyze() -> Response:
                     "ok": True,
                     "analysis_system": "UPAS Trade Assistant",
                     "result": upas_analysis.payload,
+                    "trade_plan": trade_plan,
                     "output": upas_analysis.summary,
                 }
             )
@@ -1046,14 +1158,16 @@ def api_analyze() -> Response:
             RiskSettings(),
         )
         mt5_status = build_mt5_data_status([multi["H4"], multi["H1"]])
+        trade_plan = build_ssa_trade_plan(snapshot)
         save_ssa_history(snapshot, source="mt5", mt5_data_status=mt5_status)
         return jsonify(
             {
                 "ok": True,
                 "analysis_system": "Smart System A",
                 "status": "VALID_TRADE" if isinstance(snapshot.result, TradeSetup) else "NO_TRADE",
+                "trade_plan": trade_plan,
                 "output": agent.format_result(snapshot.result),
-                "summary": build_ssa_summary(snapshot),
+                "summary": build_ssa_summary(snapshot, trade_plan),
                 "why_no_trade": build_ssa_why_no_trade(snapshot),
             }
         )
@@ -1075,6 +1189,7 @@ def index():
         "symbol": request.form.get("symbol", "XAU/USD"),
         "analysis_system": request.form.get("analysis_system", "ssa"),
         "data_source": request.form.get("data_source", "csv"),
+        "wave_timeframe": request.form.get("wave_timeframe", "H4").upper(),
         "volume_override": request.form.get("volume_override") == "on",
     }
     result = None
@@ -1087,6 +1202,8 @@ def index():
     checklist_items = []
     upas_analysis = None
     wave_analysis = None
+    wave_results = {}
+    trade_plan = None
     summary_details = []
     why_no_trade = []
     live_status = None
@@ -1130,15 +1247,18 @@ def index():
                         upas_analysis = UPASAgent().analyze(upas_input)
                         result = upas_analysis.payload
                         output = upas_analysis.summary
-                        summary_details = build_upas_summary(upas_analysis)
+                        trade_plan = build_upas_trade_plan(upas_analysis)
+                        summary_details = build_upas_summary(upas_analysis, trade_plan)
                         why_no_trade = build_upas_why_no_trade(upas_analysis)
                         save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]))
                     elif form["analysis_system"] == "wave":
-                        wave_analysis = analyze_wave_from_multi(multi, form)
+                        wave_results = analyze_wave_results_from_multi(multi)
+                        wave_analysis = select_wave_result(wave_results, form)
                         result = wave_analysis
                         output = format_wave_result(wave_analysis)
-                        summary_details = build_wave_summary(wave_analysis)
-                        save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]))
+                        trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
+                        summary_details = build_wave_summary(wave_analysis, trade_plan)
+                        save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]), trade_plan=trade_plan, related_results=wave_results)
                     else:
                         agent = SmartSystemAAgent()
                         snapshot = agent.analyze_with_snapshot(
@@ -1151,7 +1271,8 @@ def index():
                         output = agent.format_result(result)
                         is_trade = isinstance(result, TradeSetup)
                         checklist_items = build_checklist_items(snapshot)
-                        summary_details = build_ssa_summary(snapshot)
+                        trade_plan = build_ssa_trade_plan(snapshot)
+                        summary_details = build_ssa_summary(snapshot, trade_plan)
                         why_no_trade = build_ssa_why_no_trade(snapshot)
                         save_ssa_history(snapshot, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]))
                 else:
@@ -1173,11 +1294,13 @@ def index():
                     error = "Wave Structure Analyst requires one OHLC CSV containing H4 or H1 rows, or live data mode."
                     multi = {}
                 if multi:
-                    wave_analysis = analyze_wave_from_multi(multi, form)
+                    wave_results = analyze_wave_results_from_multi(multi)
+                    wave_analysis = select_wave_result(wave_results, form)
                     result = wave_analysis
                     output = format_wave_result(wave_analysis)
-                    summary_details = build_wave_summary(wave_analysis)
-                    save_wave_history(wave_analysis)
+                    trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
+                    summary_details = build_wave_summary(wave_analysis, trade_plan)
+                    save_wave_history(wave_analysis, trade_plan=trade_plan, related_results=wave_results)
             elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
@@ -1212,7 +1335,8 @@ def index():
                     upas_analysis = UPASAgent().analyze(upas_input)
                     result = upas_analysis.payload
                     output = upas_analysis.summary
-                    summary_details = build_upas_summary(upas_analysis)
+                    trade_plan = build_upas_trade_plan(upas_analysis)
+                    summary_details = build_upas_summary(upas_analysis, trade_plan)
                     why_no_trade = build_upas_why_no_trade(upas_analysis)
                     save_upas_history(upas_analysis)
             elif form["data_source"] == "live":
@@ -1223,7 +1347,8 @@ def index():
                 result = snapshot.result
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
-                summary_details = build_ssa_summary(snapshot)
+                trade_plan = build_ssa_trade_plan(snapshot)
+                summary_details = build_ssa_summary(snapshot, trade_plan)
                 why_no_trade = build_ssa_why_no_trade(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
@@ -1242,7 +1367,8 @@ def index():
                 result = snapshot.result
                 output = agent.format_result(result)
                 checklist_items = build_checklist_items(snapshot)
-                summary_details = build_ssa_summary(snapshot)
+                trade_plan = build_ssa_trade_plan(snapshot)
+                summary_details = build_ssa_summary(snapshot, trade_plan)
                 why_no_trade = build_ssa_why_no_trade(snapshot)
                 is_trade = isinstance(result, TradeSetup)
                 if isinstance(result, NoSetupResult):
@@ -1268,6 +1394,8 @@ def index():
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
         wave_analysis=wave_analysis,
+        wave_results=wave_results,
+        trade_plan=trade_plan,
         summary_details=summary_details,
         why_no_trade=why_no_trade,
         live_status=live_status,
@@ -1315,6 +1443,17 @@ def history_detail(item_id: int) -> Response:
                 </div>
                 {% if item.system_used == "Smart System A" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.trade_plan and item.detail.trade_plan.action %}
+                      <div class="panel">
+                        <h2 class="panel-title">Trade Plan</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Action</span>{{ item.detail.trade_plan.action }}</div>
+                          <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan.entry_point }}</div>
+                          <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan.take_profit }}</div>
+                          <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan.stop_loss }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
                     <div class="dashboard-grid">
                       <div class="panel">
                         <h2 class="panel-title">H4 Trend And Wave</h2>
@@ -1349,6 +1488,17 @@ def history_detail(item_id: int) -> Response:
                   </div>
                 {% elif item.system_used == "UPAS Trade Assistant" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.trade_plan_display %}
+                      <div class="panel">
+                        <h2 class="panel-title">Trade Plan</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Action</span>{{ item.detail.trade_plan_display.action }}</div>
+                          <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan_display.entry_point }}</div>
+                          <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan_display.take_profit }}</div>
+                          <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan_display.stop_loss }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
                     {% if item.detail.mt5_data_status %}
                       <div class="panel">
                         <h2 class="panel-title">MT5 Data Status</h2>
@@ -1401,6 +1551,27 @@ def history_detail(item_id: int) -> Response:
                   </div>
                 {% elif item.system_used == "Wave Structure Analyst" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.timeframe_results %}
+                      <div class="panel">
+                        <h2 class="panel-title">Wave Timeframe Results</h2>
+                        <div class="grid">
+                          {% for tf, wave in item.detail.timeframe_results.items() %}
+                            <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if item.detail.trade_plan and item.detail.trade_plan.action %}
+                      <div class="panel">
+                        <h2 class="panel-title">Trade Plan</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Action</span>{{ item.detail.trade_plan.action }}</div>
+                          <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan.entry_point }}</div>
+                          <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan.take_profit }}</div>
+                          <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan.stop_loss }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
                     {% if item.detail.mt5_data_status %}
                       <div class="panel">
                         <h2 class="panel-title">MT5 Data Status</h2>
@@ -1483,11 +1654,69 @@ def build_checklist_items(snapshot: AnalysisSnapshot) -> list[dict[str, object]]
     ]
 
 
-def build_ssa_summary(snapshot: AnalysisSnapshot) -> list[dict[str, object]]:
+def build_ssa_trade_plan(snapshot: AnalysisSnapshot) -> dict[str, object]:
+    result = snapshot.result
+    if isinstance(result, TradeSetup):
+        return {
+            "action": f"ENTER {result.setup_type}",
+            "entry_point": result.entry,
+            "take_profit": f"TP1 {result.tp1}, TP2 {result.tp2}",
+            "stop_loss": result.sl,
+        }
+    entry = snapshot.h1.entry_zone if snapshot.h1.entry_zone is not None else "Wait for valid H1 retest zone"
+    return {
+        "action": "WAIT",
+        "entry_point": entry,
+        "take_profit": "Wait until all six SSA conditions pass",
+        "stop_loss": "Wait until valid setup defines SL",
+    }
+
+
+def build_upas_trade_plan(upas_analysis: UPASAnalysis) -> dict[str, object]:
+    payload = upas_analysis.payload
+    plan = payload["trade_plan"]
+    action = "ENTER" if payload["status"] == "VALID_TRADE" else "WAIT"
+    direction = payload["setup"]["direction"]
+    if action == "ENTER" and direction in {"BUY", "SELL"}:
+        action = f"ENTER {direction}"
+    return {
+        "action": action,
+        "entry_point": plan["entry"] if plan["entry"] is not None else "Wait for valid UPAS entry trigger",
+        "take_profit": plan["take_profit"] if plan["take_profit"] is not None else "Wait until UPAS reward:risk is valid",
+        "stop_loss": plan["stop_loss"] if plan["stop_loss"] is not None else "Wait until UPAS invalidation is defined",
+    }
+
+
+def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None = None) -> dict[str, object]:
+    direction = wave.trading_bias
+    entry = round(current_price, 3) if current_price is not None else "Latest close on selected timeframe"
+    stop = wave.invalidation_level
+    if wave.status != "WAVE_CONFIRMED" or direction not in {"BUY", "SELL"} or stop is None or current_price is None:
+        return {
+            "action": "WAIT",
+            "entry_point": f"Wait for {wave.timeframe} Wave 3 confirmation and protected retest",
+            "take_profit": "Wait until wave confirmation gives a valid 1:2 target",
+            "stop_loss": stop if stop is not None else "Wait until invalidation level is clear",
+        }
+    risk = abs(current_price - stop)
+    target = current_price + 2 * risk if direction == "BUY" else current_price - 2 * risk
+    return {
+        "action": f"ENTER {direction}",
+        "entry_point": entry,
+        "take_profit": round(target, 3),
+        "stop_loss": round(stop, 3),
+    }
+
+
+def build_ssa_summary(snapshot: AnalysisSnapshot, trade_plan: dict[str, object] | None = None) -> list[dict[str, object]]:
     result = snapshot.result
     if isinstance(result, NoSetupResult):
-        return [
+        details = [
             {"label": "Decision", "value": "No setup"},
+            {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else "WAIT"},
+            {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else "Wait"},
+            {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else "Wait"},
+            {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else "Wait"},
             {"label": "Failed Rules", "value": "; ".join(result.failed_rules)},
             {"label": "H4 Wave Position", "value": result.h4_wave_position},
             {"label": "Active Wave", "value": result.active_wave if result.active_wave is not None else "Unidentifiable"},
@@ -1495,17 +1724,21 @@ def build_ssa_summary(snapshot: AnalysisSnapshot) -> list[dict[str, object]]:
             {"label": "Next Requirement", "value": result.what_next},
             {"label": "Reasoning", "value": result.reasoning_summary},
         ]
+        return details
     return [
         {"label": "Decision", "value": "Valid setup"},
+        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else "ENTER"},
         {"label": "Setup Type", "value": result.setup_type},
-        {"label": "Entry / SL / TP", "value": f"{result.entry} / {result.sl} / {result.tp1}, {result.tp2}"},
+        {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else result.entry},
+        {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else f"TP1 {result.tp1}, TP2 {result.tp2}"},
+        {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else result.sl},
         {"label": "Risk And Lot", "value": f"{result.risk_percent}% risk, {result.lot_size} lots"},
         {"label": "Confidence", "value": result.confidence_level},
         {"label": "Reasoning", "value": result.reasoning_summary},
     ]
 
 
-def build_upas_summary(upas_analysis: UPASAnalysis) -> list[dict[str, object]]:
+def build_upas_summary(upas_analysis: UPASAnalysis, trade_plan: dict[str, object] | None = None) -> list[dict[str, object]]:
     payload = upas_analysis.payload
     failed = [
         key.replace("_", " ").title()
@@ -1514,6 +1747,10 @@ def build_upas_summary(upas_analysis: UPASAnalysis) -> list[dict[str, object]]:
     ]
     details = [
         {"label": "Decision", "value": payload["status"]},
+        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else payload["status"]},
+        {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else payload["trade_plan"]["entry"]},
+        {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else payload["trade_plan"]["take_profit"]},
+        {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else payload["trade_plan"]["stop_loss"]},
         {"label": "Setup", "value": f"{payload['setup']['name']} {payload['setup']['direction']}"},
         {"label": "Confluence Score", "value": f"{payload['setup']['confluence_score']}/5"},
         {"label": "Failed Conditions", "value": "; ".join(failed) if failed else "None"},
@@ -1557,8 +1794,30 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
     return details
 
 
+def analyze_wave_results_from_multi(multi: dict[str, object]) -> dict[str, WaveAnalysisResult]:
+    results = {}
+    for timeframe in ["H4", "H1"]:
+        if timeframe in multi:
+            results[timeframe] = analyze_wave_timeframe(multi, timeframe)
+    if not results:
+        raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
+    return results
+
+
+def select_wave_result(results: dict[str, WaveAnalysisResult], form: dict[str, object]) -> WaveAnalysisResult:
+    selected = str(form.get("wave_timeframe") or "H4").upper()
+    if selected in results:
+        return results[selected]
+    if "H4" in results:
+        return results["H4"]
+    return next(iter(results.values()))
+
+
 def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -> WaveAnalysisResult:
-    timeframe = "H4" if "H4" in multi else ("H1" if "H1" in multi else "")
+    return select_wave_result(analyze_wave_results_from_multi(multi), form)
+
+
+def analyze_wave_timeframe(multi: dict[str, object], timeframe: str) -> WaveAnalysisResult:
     if timeframe not in multi:
         raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
     primary_data = multi[timeframe]
@@ -1622,9 +1881,13 @@ def infer_wave_trend(candles: list[object]) -> str:
     return "neutral"
 
 
-def build_wave_summary(wave: WaveAnalysisResult) -> list[dict[str, object]]:
+def build_wave_summary(wave: WaveAnalysisResult, trade_plan: dict[str, object] | None = None) -> list[dict[str, object]]:
     return [
         {"label": "Decision", "value": wave.status},
+        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else ("ENTER" if wave.status == "WAVE_CONFIRMED" else "WAIT")},
+        {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else "Selected timeframe latest close"},
+        {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else "Requires valid wave confirmation"},
+        {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else (wave.invalidation_level if wave.invalidation_level is not None else "None")},
         {"label": "Market Phase", "value": wave.market_phase},
         {"label": "Primary Scenario", "value": wave.primary_scenario},
         {"label": "Alternative Scenario", "value": wave.alternative_scenario},
@@ -1662,7 +1925,10 @@ def save_wave_history(
     wave: WaveAnalysisResult,
     source: str = "web",
     mt5_data_status: dict[str, object] | None = None,
+    trade_plan: dict[str, object] | None = None,
+    related_results: dict[str, WaveAnalysisResult] | None = None,
 ) -> None:
+    trade_plan = trade_plan or build_wave_trade_plan(wave)
     detail = {
         "symbol": wave.symbol,
         "timeframe": wave.timeframe,
@@ -1678,7 +1944,21 @@ def save_wave_history(
         "invalidation_level": wave.invalidation_level,
         "reason": wave.reason,
         "failed_rules": wave.failed_rules,
-        "decision_summary": build_wave_summary(wave),
+        "trade_plan": trade_plan,
+        "decision_summary": build_wave_summary(wave, trade_plan),
+        "timeframe_results": {
+            timeframe: {
+                "status": result.status,
+                "market_phase": result.market_phase,
+                "primary_scenario": result.primary_scenario,
+                "direction": result.direction,
+                "wave_score": result.wave_score,
+                "confidence": result.confidence,
+                "trading_bias": result.trading_bias,
+                "invalidation_level": result.invalidation_level,
+            }
+            for timeframe, result in (related_results or {}).items()
+        },
     }
     if mt5_data_status:
         detail["mt5_data_status"] = mt5_data_status
@@ -1727,6 +2007,7 @@ def save_ssa_history(
     mt5_data_status: dict[str, object] | None = None,
 ) -> None:
     result = snapshot.result
+    trade_plan = build_ssa_trade_plan(snapshot)
     if isinstance(result, TradeSetup):
         status = "VALID_TRADE"
         setup_name = result.setup_type
@@ -1743,7 +2024,8 @@ def save_ssa_history(
         "h4": snapshot.h4.__dict__,
         "h1": snapshot.h1.__dict__,
         "checklist": snapshot.checklist.__dict__,
-        "decision_summary": build_ssa_summary(snapshot),
+        "trade_plan": trade_plan,
+        "decision_summary": build_ssa_summary(snapshot, trade_plan),
         "why_no_trade": build_ssa_why_no_trade(snapshot),
     }
     if mt5_data_status:
@@ -1758,6 +2040,7 @@ def save_upas_history(
 ) -> None:
     payload = upas_analysis.payload
     detail = dict(payload)
+    detail["trade_plan_display"] = build_upas_trade_plan(upas_analysis)
     if mt5_data_status:
         detail["mt5_data_status"] = mt5_data_status
     add_history(

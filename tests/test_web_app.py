@@ -24,6 +24,7 @@ def test_home_page_loads() -> None:
     assert b"UPAS CSV Template" in response.data
     assert b"Wave Structure Analyst" in response.data
     assert b"Wave CSV Template" in response.data
+    assert b"Wave Result View" in response.data
 
 
 def test_api_ping() -> None:
@@ -75,6 +76,8 @@ def test_dashboard_sections_render_for_csv_upload() -> None:
     assert b"H4 Trend And Wave" in response.data
     assert b"H1 Structure And Entry" in response.data
     assert b"Six-Condition SSA Checklist" in response.data
+    assert b"Trade Plan" in response.data
+    assert b"Entry Point" in response.data
     assert b"Decision Summary" in response.data
     assert b"View raw analysis output" in response.data
 
@@ -109,6 +112,9 @@ def test_upas_selector_renders_upas_dashboard() -> None:
     assert b"UPAS Market Bias" in response.data
     assert b"UPAS Confluence Checklist" in response.data
     assert b"UPAS Trade Assistant" in response.data
+    assert b"Trade Plan" in response.data
+    assert b"Take Profit" in response.data
+    assert b"Stop Loss" in response.data
     assert b"Decision Summary" in response.data
     assert b"View raw analysis output" in response.data
 
@@ -145,7 +151,45 @@ def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
     payload = response.get_json()
     assert payload["ok"] is True
     assert payload["analysis_system"] == "Smart System A"
+    assert payload["trade_plan"]["action"] in {"ENTER BUY LIMIT", "ENTER SELL LIMIT", "WAIT"}
     assert "output" in payload
+
+
+def test_api_analyze_accepts_mt5_wave_ohlc_csv() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    rows = [
+        (4000, 4014, 3995, 4010),
+        (4010, 4026, 4008, 4022),
+        (4022, 4040, 4020, 4036),
+        (4036, 4056, 4034, 4052),
+        (4052, 4074, 4050, 4070),
+        (4070, 4082, 4064, 4078),
+        (4078, 4080, 4058, 4062),
+        (4062, 4070, 4048, 4052),
+        (4052, 4062, 4046, 4058),
+        (4058, 4090, 4056, 4088),
+        (4088, 4118, 4077, 4110),
+        (4110, 4140, 4108, 4134),
+    ]
+    for idx, (open_, high, low, close) in enumerate(rows):
+        text += f"H4,2026-01-01 {idx:02d}:00,{open_},{high},{low},{close},1000\n"
+        text += f"H1,2026-01-02 {idx:02d}:00,{open_ + 20},{high + 20},{low + 20},{close + 20},1000\n"
+
+    client = app.test_client()
+    response = client.post(
+        "/api/analyze",
+        json={"analysis_system": "wave", "symbol": "XAUUSD", "ohlc_csv": text},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["analysis_system"] == "Wave Structure Analyst"
+    assert payload["result"]["timeframe"] == "H4"
+    assert set(payload["results"]) == {"H4", "H1"}
+    assert payload["selected_timeframe"] == "H4"
+    assert payload["trade_plan"]["action"] in {"ENTER BUY", "ENTER SELL", "WAIT"}
+    assert "Wave Structure Analyst Result" in payload["output"]
 
 
 def test_wave_structure_csv_upload_renders_dashboard() -> None:
@@ -181,8 +225,47 @@ def test_wave_structure_csv_upload_renders_dashboard() -> None:
     assert b"Wave Structure Analyst Result" in response.data
     assert b"Wave 3 Continuation" in response.data
     assert b"Trading Bias" in response.data
-    assert b"Wave Timeframe" not in response.data
+    assert b"Trade Plan" in response.data
+    assert b"Entry Point" in response.data
+    assert b"Stop Loss" in response.data
     assert b"Swing Highs" not in response.data
+
+
+def test_wave_structure_can_select_h1_result() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    rows = [
+        (4000, 4014, 3995, 4010),
+        (4010, 4026, 4008, 4022),
+        (4022, 4040, 4020, 4036),
+        (4036, 4056, 4034, 4052),
+        (4052, 4074, 4050, 4070),
+        (4070, 4082, 4064, 4078),
+        (4078, 4080, 4058, 4062),
+        (4062, 4070, 4048, 4052),
+        (4052, 4062, 4046, 4058),
+        (4058, 4090, 4056, 4088),
+        (4088, 4118, 4077, 4110),
+        (4110, 4140, 4108, 4134),
+    ]
+    for idx, (open_, high, low, close) in enumerate(rows):
+        text += f"H4,2026-01-01 {idx:02d}:00,{open_},{high},{low},{close},1000\n"
+        text += f"H1,2026-01-02 {idx:02d}:00,{open_ + 30},{high + 30},{low + 30},{close + 30},1000\n"
+
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={
+            "analysis_system": "wave",
+            "data_source": "csv",
+            "wave_timeframe": "H1",
+            "ohlc_data": (BytesIO(text.encode("utf-8")), "wave.csv"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"Wave Timeframe Results" in response.data
+    assert b"<span>Timeframe</span>H1" in response.data
 
 
 def test_wave_template_downloads() -> None:
@@ -219,6 +302,22 @@ def test_mt5_direct_mode_creates_on_demand_request(monkeypatch) -> None:
     assert response.status_code == 200
     assert request_response.status_code == 200
     assert request_response.data in {b"upas", b"ssa"}
+
+
+def test_mt5_direct_mode_creates_wave_on_demand_request(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
+    client = app.test_client()
+    for _ in range(20):
+        if client.get("/api/mt5/next-request").data == b"none":
+            break
+
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "wave"})
+    request_response = client.get("/api/mt5/next-request")
+
+    assert response.status_code == 200
+    assert request_response.status_code == 200
+    assert request_response.data == b"wave"
 
 
 def test_history_rows_are_clickable_after_api_push() -> None:

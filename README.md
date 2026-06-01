@@ -64,6 +64,7 @@ The web platform lets you upload one combined OHLC CSV file or use the live feed
 The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
 
 Analysis results are shown in a dashboard with separate sections for H4 trend and wave context, H1 structure and entry behavior, the six-condition SSA checklist, risk metrics, and the exact final SSA output.
+Each strategy also shows a trade plan panel with the current action, entry point, take profit, and stop loss. When rules are not complete, the action remains `WAIT` and the plan explains what must form before entry.
 
 ## Analysis Systems
 
@@ -75,7 +76,7 @@ The web platform supports three selectable analysis systems:
 
 CSV mode for UPAS requires one OHLC file containing MN1, W1, D1, H4, and H1 rows. Live mode fetches all five timeframes when `TWELVE_DATA_API_KEY` is configured.
 
-CSV mode for Wave Structure Analyst requires one OHLC file containing H4 or H1 rows. Optional D1, M30, and M15 rows can provide extra context. The Wave CSV template is available from the web app sidebar.
+CSV mode for Wave Structure Analyst requires one OHLC file containing H4 or H1 rows. When both H4 and H1 rows are present, the app calculates both wave results and lets you select which timeframe result to view. Optional D1, M30, and M15 rows can provide extra context. The Wave CSV template is available from the web app sidebar.
 
 ## Live XAUUSD Feed
 
@@ -178,10 +179,11 @@ Default interval:
 InpPushIntervalSeconds = 300
 ```
 
-The EA pushes both systems:
+The EA pushes all three analysis systems:
 
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
+- Wave Structure Analyst: D1, H4, and H1
 
 Server endpoint:
 

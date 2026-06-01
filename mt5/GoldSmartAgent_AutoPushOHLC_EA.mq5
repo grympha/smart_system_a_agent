@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //| Gold Smart Agent - Auto Push OHLCV EA                            |
 //| Place in: MQL5/Experts/GoldSmartAgent_AutoPushOHLC_EA.mq5         |
-//| Pushes Smart System A and UPAS data every 5 minutes.              |
+//| Pushes Smart System A, UPAS, and Wave data every 5 minutes.       |
 //+------------------------------------------------------------------+
 #property strict
 
@@ -106,6 +106,23 @@ bool BuildCsv(string symbol, string analysis_system, int bars)
       return true;
    }
 
+   if(system == "wave")
+   {
+      if(AppendRates(symbol, PERIOD_D1, bars) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_H4, bars) == false)
+      {
+         return false;
+      }
+      if(AppendRates(symbol, PERIOD_H1, bars) == false)
+      {
+         return false;
+      }
+      return true;
+   }
+
    if(AppendRates(symbol, PERIOD_H4, bars) == false)
    {
       return false;
@@ -188,14 +205,15 @@ void PushBothSystems()
    g_last_push_time = TimeCurrent();
 
    Print("Gold Smart Agent: push cycle #", g_push_count, " at ", TimeToString(g_last_push_time, TIME_DATE | TIME_SECONDS));
-   Print("Gold Smart Agent: pushing SSA and UPAS for ", symbol, ". Interval seconds: ", InpPushIntervalSeconds);
+   Print("Gold Smart Agent: pushing SSA, UPAS, and Wave for ", symbol, ". Interval seconds: ", InpPushIntervalSeconds);
 
    if(InpPingBeforePush)
       PingServer();
 
    bool ssa_ok = PushAnalysis(symbol, "ssa");
    bool upas_ok = PushAnalysis(symbol, "upas");
-   Print("Gold Smart Agent: push cycle complete. SSA=", ssa_ok, " UPAS=", upas_ok);
+   bool wave_ok = PushAnalysis(symbol, "wave");
+   Print("Gold Smart Agent: push cycle complete. SSA=", ssa_ok, " UPAS=", upas_ok, " WAVE=", wave_ok);
 }
 
 int OnInit()
@@ -211,7 +229,7 @@ int OnInit()
    if(display_symbol == "")
       display_symbol = _Symbol;
    Print("Gold Smart Agent Auto Push EA symbol: ", display_symbol);
-   Print("Gold Smart Agent Auto Push EA pushes both SSA and UPAS every 5 minutes.");
+   Print("Gold Smart Agent Auto Push EA pushes SSA, UPAS, and Wave every 5 minutes.");
 
    if(InpPushOnStart)
       PushBothSystems();

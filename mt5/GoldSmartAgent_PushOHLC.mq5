@@ -5,7 +5,7 @@
 #property script_show_inputs
 
 input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
-input string InpAnalysisSystem = "ssa"; // ssa or upas
+input string InpAnalysisSystem = "ssa"; // ssa, upas, or wave
 input string InpSymbol = "";            // blank = current chart symbol
 input int    InpBarsPerTimeframe = 120;
 input int    InpTimeoutMs = 15000;
@@ -79,6 +79,13 @@ bool BuildCsv(string symbol, string analysis_system, int bars, string &csv)
       return AppendRates(symbol, PERIOD_MN1, bars, csv)
          && AppendRates(symbol, PERIOD_W1, bars, csv)
          && AppendRates(symbol, PERIOD_D1, bars, csv)
+         && AppendRates(symbol, PERIOD_H4, bars, csv)
+         && AppendRates(symbol, PERIOD_H1, bars, csv);
+   }
+
+   if(system == "wave")
+   {
+      return AppendRates(symbol, PERIOD_D1, bars, csv)
          && AppendRates(symbol, PERIOD_H4, bars, csv)
          && AppendRates(symbol, PERIOD_H1, bars, csv);
    }
