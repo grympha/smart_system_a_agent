@@ -172,11 +172,6 @@ def test_wave_structure_csv_upload_renders_dashboard() -> None:
         data={
             "analysis_system": "wave",
             "data_source": "csv",
-            "wave_timeframe": "H4",
-            "current_price": "4134",
-            "breakout_level": "4082",
-            "retest_level": "4082",
-            "trend_direction": "bullish",
             "ohlc_data": (BytesIO(text.encode("utf-8")), "wave.csv"),
         },
         content_type="multipart/form-data",
@@ -186,6 +181,8 @@ def test_wave_structure_csv_upload_renders_dashboard() -> None:
     assert b"Wave Structure Analyst Result" in response.data
     assert b"Wave 3 Continuation" in response.data
     assert b"Trading Bias" in response.data
+    assert b"Wave Timeframe" not in response.data
+    assert b"Swing Highs" not in response.data
 
 
 def test_wave_template_downloads() -> None:

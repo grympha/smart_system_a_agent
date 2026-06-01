@@ -405,9 +405,6 @@ PAGE = """
     body[data-source="live"] .csv-only {
       display: none;
     }
-    body:not([data-system="wave"]) .wave-only {
-      display: none;
-    }
     details.raw-output {
       margin-top: 14px;
       border-top: 1px solid var(--line);
@@ -563,34 +560,6 @@ PAGE = """
             <a href="/templates/upas.csv">UPAS CSV Template</a>
             <a href="/templates/wave.csv">Wave CSV Template</a>
           </div>
-        </div>
-        <div class="wave-only">
-          <label for="wave_timeframe">Wave Timeframe</label>
-          <select id="wave_timeframe" name="wave_timeframe">
-            {% for tf in ["H4", "H1", "D1", "M30", "M15"] %}
-              <option value="{{ tf }}" {% if form.wave_timeframe == tf %}selected{% endif %}>{{ tf }}</option>
-            {% endfor %}
-          </select>
-          <label for="current_price">Current Price</label>
-          <input id="current_price" name="current_price" type="number" step="0.01" value="{{ form.current_price }}">
-          <label for="trend_direction">Trend Direction</label>
-          <select id="trend_direction" name="trend_direction">
-            {% for direction in ["auto", "bullish", "bearish", "neutral"] %}
-              <option value="{{ direction }}" {% if form.trend_direction == direction %}selected{% endif %}>{{ direction.title() }}</option>
-            {% endfor %}
-          </select>
-          <label for="breakout_level">Breakout Level</label>
-          <input id="breakout_level" name="breakout_level" type="number" step="0.01" value="{{ form.breakout_level }}">
-          <label for="retest_level">Retest Level</label>
-          <input id="retest_level" name="retest_level" type="number" step="0.01" value="{{ form.retest_level }}">
-          <label for="swing_highs">Swing Highs</label>
-          <input id="swing_highs" name="swing_highs" type="text" value="{{ form.swing_highs }}" placeholder="4500, 4520, 4545">
-          <label for="swing_lows">Swing Lows</label>
-          <input id="swing_lows" name="swing_lows" type="text" value="{{ form.swing_lows }}" placeholder="4420, 4445, 4470">
-          <label for="ssa_score">Smart System A Score</label>
-          <input id="ssa_score" name="ssa_score" type="text" value="{{ form.ssa_score }}" placeholder="Optional, e.g. 5/6">
-          <label for="upas_score">UPAS Score</label>
-          <input id="upas_score" name="upas_score" type="text" value="{{ form.upas_score }}" placeholder="Optional, e.g. 4/5">
         </div>
         <label for="chart_image">Chart Screenshot</label>
         <input id="chart_image" name="chart_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
@@ -968,13 +937,8 @@ PAGE = """
   </main>
   <script>
     const dataSource = document.getElementById("data_source");
-    const analysisSystem = document.getElementById("analysis_system");
-    const syncSource = () => {
-      document.body.dataset.source = dataSource.value;
-      document.body.dataset.system = analysisSystem.value;
-    };
+    const syncSource = () => document.body.dataset.source = dataSource.value;
     dataSource.addEventListener("change", syncSource);
-    analysisSystem.addEventListener("change", syncSource);
     syncSource();
   </script>
 </body>
@@ -1112,15 +1076,6 @@ def index():
         "analysis_system": request.form.get("analysis_system", "ssa"),
         "data_source": request.form.get("data_source", "csv"),
         "volume_override": request.form.get("volume_override") == "on",
-        "wave_timeframe": request.form.get("wave_timeframe", "H4"),
-        "current_price": request.form.get("current_price", ""),
-        "swing_highs": request.form.get("swing_highs", ""),
-        "swing_lows": request.form.get("swing_lows", ""),
-        "breakout_level": request.form.get("breakout_level", ""),
-        "retest_level": request.form.get("retest_level", ""),
-        "trend_direction": request.form.get("trend_direction", "auto"),
-        "ssa_score": request.form.get("ssa_score", ""),
-        "upas_score": request.form.get("upas_score", ""),
     }
     result = None
     output = None
@@ -1603,18 +1558,17 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
 
 
 def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -> WaveAnalysisResult:
-    timeframe = str(form.get("wave_timeframe") or "H4").upper()
+    timeframe = "H4" if "H4" in multi else ("H1" if "H1" in multi else "")
     if timeframe not in multi:
-        if "H4" in multi:
-            timeframe = "H4"
-        elif "H1" in multi:
-            timeframe = "H1"
-        else:
-            raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
+        raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
     primary_data = multi[timeframe]
-    current_price = parse_optional_float(str(form.get("current_price") or ""))
-    if current_price is None:
-        current_price = primary_data.candles[-1].close
+    current_price = primary_data.candles[-1].close
+    swing_highs, swing_lows = derive_swings(primary_data.candles)
+    trend_direction = infer_wave_trend(primary_data.candles)
+    breakout_level = swing_highs[-2] if trend_direction == "bullish" and len(swing_highs) >= 2 else None
+    if trend_direction == "bearish" and len(swing_lows) >= 2:
+        breakout_level = swing_lows[-2]
+    retest_level = breakout_level
     request_data = WaveAnalysisInput(
         symbol="XAUUSD",
         timeframe=timeframe,
@@ -1625,26 +1579,47 @@ def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -
         m30=multi.get("M30"),
         m15=multi.get("M15"),
         current_price=current_price,
-        swing_highs=parse_float_list(str(form.get("swing_highs") or "")),
-        swing_lows=parse_float_list(str(form.get("swing_lows") or "")),
-        breakout_level=parse_optional_float(str(form.get("breakout_level") or "")),
-        retest_level=parse_optional_float(str(form.get("retest_level") or "")),
-        trend_direction=str(form.get("trend_direction") or "auto"),
-        smart_system_a_score=str(form.get("ssa_score") or "") or None,
-        upas_score=str(form.get("upas_score") or "") or None,
+        swing_highs=swing_highs,
+        swing_lows=swing_lows,
+        breakout_level=breakout_level,
+        retest_level=retest_level,
+        trend_direction=trend_direction,
     )
     return WaveStructureAnalyst().analyze(request_data)
 
 
-def parse_optional_float(value: str) -> float | None:
-    value = value.strip()
-    return float(value) if value else None
+def derive_swings(candles: list[object]) -> tuple[list[float], list[float]]:
+    swing_highs = []
+    swing_lows = []
+    for index in range(1, len(candles) - 1):
+        previous = candles[index - 1]
+        current = candles[index]
+        following = candles[index + 1]
+        if current.high >= previous.high and current.high >= following.high:
+            swing_highs.append(current.high)
+        if current.low <= previous.low and current.low <= following.low:
+            swing_lows.append(current.low)
+    if not swing_highs:
+        swing_highs = [max(c.high for c in candles)]
+    if not swing_lows:
+        swing_lows = [min(c.low for c in candles)]
+    return swing_highs, swing_lows
 
 
-def parse_float_list(value: str) -> list[float]:
-    if not value.strip():
-        return []
-    return [float(part.strip()) for part in value.split(",") if part.strip()]
+def infer_wave_trend(candles: list[object]) -> str:
+    if len(candles) < 6:
+        return "neutral"
+    first = candles[0].close
+    last = candles[-1].close
+    recent_high = max(c.high for c in candles[-5:])
+    prior_high = max(c.high for c in candles[:5])
+    recent_low = min(c.low for c in candles[-5:])
+    prior_low = min(c.low for c in candles[:5])
+    if last > first and recent_high > prior_high and recent_low > prior_low:
+        return "bullish"
+    if last < first and recent_low < prior_low and recent_high < prior_high:
+        return "bearish"
+    return "neutral"
 
 
 def build_wave_summary(wave: WaveAnalysisResult) -> list[dict[str, object]]:
