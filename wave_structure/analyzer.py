@@ -61,11 +61,13 @@ class WaveStructureAnalyst:
         breakout_level: float,
         retest_level: float,
     ) -> WaveAnalysisResult:
-        recent_lows = [c.low for c in candles[-5:]]
-        wave2_respected = min(recent_lows) > wave1_low
+        retest = self._bullish_retest(candles, breakout_level, wave1_low)
+        entry_zone = retest["entry"] if retest else None
+        invalidation = retest["invalidation"] if retest else min(c.low for c in candles[-5:])
+        wave2_respected = invalidation > wave1_low
         breakout_confirmed = current_price > breakout_level and candles[-1].close > wave1_high
-        retest_confirmed = min(recent_lows) <= retest_level * 1.003 and min(recent_lows) >= wave1_low
-        rr_valid = self._risk_reward_valid(current_price, min(recent_lows), current_price + 2 * abs(current_price - min(recent_lows)))
+        retest_confirmed = retest is not None
+        rr_valid = self._risk_reward_valid(entry_zone, invalidation)
         score, failed = self._score(True, wave2_respected, breakout_confirmed, retest_confirmed, request.trend_direction == "bullish", rr_valid)
         bias = "BUY" if score >= 8 else "WAIT"
         return self._result(
@@ -78,8 +80,8 @@ class WaveStructureAnalyst:
             risk="Low" if score >= 8 else "Medium",
             bias=bias,
             action="Prepare for BUY only after pullback/retest remains protected." if bias == "BUY" else "Wait for stronger breakout and retest confirmation.",
-            entry_zone=retest_level if score >= 8 else None,
-            invalidation=min(recent_lows),
+            entry_zone=entry_zone if score >= 8 else None,
+            invalidation=invalidation,
             reason=(
                 f"Bullish structure checks Wave 1 high {wave1_high}, Wave 1 low {wave1_low}, "
                 f"breakout level {breakout_level}, and retest level {retest_level}. "
@@ -98,11 +100,13 @@ class WaveStructureAnalyst:
         breakout_level: float,
         retest_level: float,
     ) -> WaveAnalysisResult:
-        recent_highs = [c.high for c in candles[-5:]]
-        wave2_respected = max(recent_highs) < wave1_high
+        retest = self._bearish_retest(candles, breakout_level, wave1_high)
+        entry_zone = retest["entry"] if retest else None
+        invalidation = retest["invalidation"] if retest else max(c.high for c in candles[-5:])
+        wave2_respected = invalidation < wave1_high
         breakout_confirmed = current_price < breakout_level and candles[-1].close < wave1_low
-        retest_confirmed = max(recent_highs) >= retest_level * 0.997 and max(recent_highs) <= wave1_high
-        rr_valid = self._risk_reward_valid(current_price, max(recent_highs), current_price - 2 * abs(max(recent_highs) - current_price))
+        retest_confirmed = retest is not None
+        rr_valid = self._risk_reward_valid(entry_zone, invalidation)
         score, failed = self._score(True, wave2_respected, breakout_confirmed, retest_confirmed, request.trend_direction == "bearish", rr_valid)
         bias = "SELL" if score >= 8 else "WAIT"
         return self._result(
@@ -115,8 +119,8 @@ class WaveStructureAnalyst:
             risk="Low" if score >= 8 else "Medium",
             bias=bias,
             action="Prepare for SELL only after pullback/retest remains protected." if bias == "SELL" else "Wait for stronger breakdown and retest confirmation.",
-            entry_zone=retest_level if score >= 8 else None,
-            invalidation=max(recent_highs),
+            entry_zone=entry_zone if score >= 8 else None,
+            invalidation=invalidation,
             reason=(
                 f"Bearish structure checks Wave 1 low {wave1_low}, Wave 1 high {wave1_high}, "
                 f"breakdown level {breakout_level}, and retest level {retest_level}. "
@@ -290,7 +294,45 @@ class WaveStructureAnalyst:
         sharp_rejection = candles[-1].upper_wick > candles[-1].body * 1.5 or candles[-1].lower_wick > candles[-1].body * 1.5
         return extension and slowing and (sharp_rejection or impulse < 0.8)
 
-    def _risk_reward_valid(self, entry: float, stop: float, target: float) -> bool:
-        risk = abs(entry - stop)
-        reward = abs(target - entry)
-        return risk > 0 and reward / risk >= 2
+    def _bullish_retest(self, candles: list[Candle], breakout_level: float, wave1_low: float) -> dict[str, float] | None:
+        avg_range = mean(c.range for c in candles[-10:])
+        tolerance = max(avg_range * 0.35, 1.0)
+        break_index = self._break_index(candles, breakout_level, "bullish")
+        if break_index is None:
+            return None
+        for candle in reversed(candles[break_index + 1:]):
+            retested = candle.low <= breakout_level + tolerance
+            protected = candle.low > wave1_low and candle.close > breakout_level
+            risk_reasonable = breakout_level - candle.low <= max(avg_range * 2.0, tolerance)
+            if retested and protected and risk_reasonable:
+                return {"entry": round(breakout_level, 3), "invalidation": round(candle.low, 3)}
+        return None
+
+    def _bearish_retest(self, candles: list[Candle], breakout_level: float, wave1_high: float) -> dict[str, float] | None:
+        avg_range = mean(c.range for c in candles[-10:])
+        tolerance = max(avg_range * 0.35, 1.0)
+        break_index = self._break_index(candles, breakout_level, "bearish")
+        if break_index is None:
+            return None
+        for candle in reversed(candles[break_index + 1:]):
+            retested = candle.high >= breakout_level - tolerance
+            protected = candle.high < wave1_high and candle.close < breakout_level
+            risk_reasonable = candle.high - breakout_level <= max(avg_range * 2.0, tolerance)
+            if retested and protected and risk_reasonable:
+                return {"entry": round(breakout_level, 3), "invalidation": round(candle.high, 3)}
+        return None
+
+    def _break_index(self, candles: list[Candle], level: float, direction: str) -> int | None:
+        for index in range(1, len(candles)):
+            previous = candles[index - 1]
+            current = candles[index]
+            if direction == "bullish" and previous.close <= level and current.close > level:
+                return index
+            if direction == "bearish" and previous.close >= level and current.close < level:
+                return index
+        return None
+
+    def _risk_reward_valid(self, entry: float | None, stop: float | None) -> bool:
+        if entry is None or stop is None:
+            return False
+        return abs(entry - stop) > 0
