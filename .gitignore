@@ -21,6 +21,7 @@ analysis_history.db-*
 .env
 .env.*
 !.env.example
+tools/
 
 instance/
 .DS_Store
