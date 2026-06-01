@@ -18,9 +18,10 @@ from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
 from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
-from templates import ssa_template_csv, upas_template_csv
+from templates import ssa_template_csv, upas_template_csv, wave_template_csv
 from upas import UPASAgent
 from upas.models import UPASAnalysis, UPASInput
+from wave_structure import WaveAnalysisInput, WaveAnalysisResult, WaveStructureAnalyst
 
 
 app = Flask(__name__)
@@ -404,6 +405,9 @@ PAGE = """
     body[data-source="live"] .csv-only {
       display: none;
     }
+    body:not([data-system="wave"]) .wave-only {
+      display: none;
+    }
     details.raw-output {
       margin-top: 14px;
       border-top: 1px solid var(--line);
@@ -543,6 +547,7 @@ PAGE = """
         <select id="analysis_system" name="analysis_system">
           <option value="ssa" {% if form.analysis_system == "ssa" %}selected{% endif %}>Smart System A</option>
           <option value="upas" {% if form.analysis_system == "upas" %}selected{% endif %}>UPAS Trade Assistant</option>
+          <option value="wave" {% if form.analysis_system == "wave" %}selected{% endif %}>Wave Structure Analyst</option>
         </select>
         <label for="data_source">Data Source</label>
         <select id="data_source" name="data_source">
@@ -551,12 +556,41 @@ PAGE = """
           <option value="mt5" {% if form.data_source == "mt5" %}selected{% endif %}>MT5 Direct Mode</option>
         </select>
         <div class="csv-only">
-          <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. For Smart System A include H4 and H1 rows. For UPAS include MN1, W1, D1, H4, and H1 rows. Volume may be blank, but volume-based rules may fail.">!</span></label>
+          <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. Smart System A: H4/H1. UPAS: MN1/W1/D1/H4/H1. Wave Structure Analyst: H4/H1, optional D1/M30/M15.">!</span></label>
           <input id="ohlc_data" name="ohlc_data" type="file" accept=".csv">
           <div class="quick-actions">
             <a href="/templates/ssa.csv">SSA CSV Template</a>
             <a href="/templates/upas.csv">UPAS CSV Template</a>
+            <a href="/templates/wave.csv">Wave CSV Template</a>
           </div>
+        </div>
+        <div class="wave-only">
+          <label for="wave_timeframe">Wave Timeframe</label>
+          <select id="wave_timeframe" name="wave_timeframe">
+            {% for tf in ["H4", "H1", "D1", "M30", "M15"] %}
+              <option value="{{ tf }}" {% if form.wave_timeframe == tf %}selected{% endif %}>{{ tf }}</option>
+            {% endfor %}
+          </select>
+          <label for="current_price">Current Price</label>
+          <input id="current_price" name="current_price" type="number" step="0.01" value="{{ form.current_price }}">
+          <label for="trend_direction">Trend Direction</label>
+          <select id="trend_direction" name="trend_direction">
+            {% for direction in ["auto", "bullish", "bearish", "neutral"] %}
+              <option value="{{ direction }}" {% if form.trend_direction == direction %}selected{% endif %}>{{ direction.title() }}</option>
+            {% endfor %}
+          </select>
+          <label for="breakout_level">Breakout Level</label>
+          <input id="breakout_level" name="breakout_level" type="number" step="0.01" value="{{ form.breakout_level }}">
+          <label for="retest_level">Retest Level</label>
+          <input id="retest_level" name="retest_level" type="number" step="0.01" value="{{ form.retest_level }}">
+          <label for="swing_highs">Swing Highs</label>
+          <input id="swing_highs" name="swing_highs" type="text" value="{{ form.swing_highs }}" placeholder="4500, 4520, 4545">
+          <label for="swing_lows">Swing Lows</label>
+          <input id="swing_lows" name="swing_lows" type="text" value="{{ form.swing_lows }}" placeholder="4420, 4445, 4470">
+          <label for="ssa_score">Smart System A Score</label>
+          <input id="ssa_score" name="ssa_score" type="text" value="{{ form.ssa_score }}" placeholder="Optional, e.g. 5/6">
+          <label for="upas_score">UPAS Score</label>
+          <input id="upas_score" name="upas_score" type="text" value="{{ form.upas_score }}" placeholder="Optional, e.g. 4/5">
         </div>
         <label for="chart_image">Chart Screenshot</label>
         <input id="chart_image" name="chart_image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
@@ -740,6 +774,48 @@ PAGE = """
                 </div>
               </div>
             </div>
+          {% elif wave_analysis %}
+            <div class="status {{ '' if wave_analysis.status == 'WAVE_CONFIRMED' else 'no-setup' }}">{{ wave_analysis.status }}</div>
+            <div class="dashboard">
+              <div class="panel">
+                <h2 class="panel-title">Wave Structure Analyst Result</h2>
+                <div class="grid">
+                  <div class="metric"><span>Symbol</span>{{ wave_analysis.symbol }}</div>
+                  <div class="metric"><span>Timeframe</span>{{ wave_analysis.timeframe }}</div>
+                  <div class="metric"><span>Market Phase</span>{{ wave_analysis.market_phase }}</div>
+                  <div class="metric"><span>Primary Scenario</span>{{ wave_analysis.primary_scenario }}</div>
+                  <div class="metric"><span>Alternative Scenario</span>{{ wave_analysis.alternative_scenario }}</div>
+                  <div class="metric"><span>Direction</span>{{ wave_analysis.direction }}</div>
+                  <div class="metric"><span>Wave Score</span>{{ wave_analysis.wave_score }}/10</div>
+                  <div class="metric"><span>Confidence</span>{{ wave_analysis.confidence }}%</div>
+                  <div class="metric"><span>Risk Level</span>{{ wave_analysis.risk_level }}</div>
+                  <div class="metric"><span>Trading Bias</span>{{ wave_analysis.trading_bias }}</div>
+                  <div class="metric"><span>Invalidation Level</span>{{ wave_analysis.invalidation_level if wave_analysis.invalidation_level is not none else "None" }}</div>
+                  <div class="metric"><span>Safety</span>Analysis only</div>
+                </div>
+              </div>
+              <div class="decision-summary">
+                <h2>Wave Decision Summary</h2>
+                <dl class="summary-list">
+                  {% for item in summary_details %}
+                    <div class="summary-row">
+                      <dt>{{ item.label }}</dt>
+                      <dd>{{ item.value }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              </div>
+              {% if wave_analysis.failed_rules %}
+                <div class="why-panel">
+                  <h2>Why Wait?</h2>
+                  <ul class="why-list">
+                    {% for rule in wave_analysis.failed_rules %}
+                      <li>{{ rule }}</li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+            </div>
           {% elif is_trade %}
             <div class="status">Valid SSA Setup</div>
             <div class="grid">
@@ -826,7 +902,7 @@ PAGE = """
               </ul>
             </div>
           {% endif %}
-          {% if upas_analysis or snapshot %}
+          {% if upas_analysis or snapshot or wave_analysis %}
             <details class="raw-output">
               <summary>View raw analysis output</summary>
               <pre>{{ output }}</pre>
@@ -855,7 +931,7 @@ PAGE = """
       {% else %}
         <div class="panel">
           <strong>Choose an analysis system, then upload one OHLC CSV or use the live XAUUSD feed.</strong>
-          <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Screenshots are accepted for intake only.</p>
+          <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Wave Structure Analyst requires H4 or H1 rows and supports optional D1, M30, and M15 context.</p>
         </div>
       {% endif %}
       {% if history %}
@@ -892,8 +968,13 @@ PAGE = """
   </main>
   <script>
     const dataSource = document.getElementById("data_source");
-    const syncSource = () => document.body.dataset.source = dataSource.value;
+    const analysisSystem = document.getElementById("analysis_system");
+    const syncSource = () => {
+      document.body.dataset.source = dataSource.value;
+      document.body.dataset.system = analysisSystem.value;
+    };
     dataSource.addEventListener("change", syncSource);
+    analysisSystem.addEventListener("change", syncSource);
     syncSource();
   </script>
 </body>
@@ -923,6 +1004,15 @@ def download_upas_template() -> Response:
     )
 
 
+@app.get("/templates/wave.csv")
+def download_wave_template() -> Response:
+    return Response(
+        wave_template_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=wave_structure_ohlc_template.csv"},
+    )
+
+
 @app.post("/api/analyze")
 def api_analyze() -> Response:
     payload = request.get_json(silent=True) or {}
@@ -934,6 +1024,30 @@ def api_analyze() -> Response:
 
     try:
         multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
+        if analysis_system == "wave":
+            wave_form = {
+                "wave_timeframe": payload.get("timeframe") or ("H4" if "H4" in multi else "H1"),
+                "current_price": str(payload.get("current_price") or ""),
+                "swing_highs": ",".join(str(v) for v in payload.get("swing_highs", [])),
+                "swing_lows": ",".join(str(v) for v in payload.get("swing_lows", [])),
+                "breakout_level": str(payload.get("breakout_level") or ""),
+                "retest_level": str(payload.get("retest_level") or ""),
+                "trend_direction": payload.get("trend_direction") or "auto",
+                "ssa_score": payload.get("ssa_score") or "",
+                "upas_score": payload.get("upas_score") or "",
+            }
+            wave = analyze_wave_from_multi(multi, wave_form)
+            save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]))
+            return jsonify(
+                {
+                    "ok": True,
+                    "analysis_system": "Wave Structure Analyst",
+                    "status": wave.status,
+                    "result": wave.__dict__,
+                    "output": format_wave_result(wave),
+                    "summary": build_wave_summary(wave),
+                }
+            )
         if analysis_system == "upas":
             missing = [tf for tf in ["MN1", "W1", "D1", "H4", "H1"] if tf not in multi]
             if missing:
@@ -998,6 +1112,15 @@ def index():
         "analysis_system": request.form.get("analysis_system", "ssa"),
         "data_source": request.form.get("data_source", "csv"),
         "volume_override": request.form.get("volume_override") == "on",
+        "wave_timeframe": request.form.get("wave_timeframe", "H4"),
+        "current_price": request.form.get("current_price", ""),
+        "swing_highs": request.form.get("swing_highs", ""),
+        "swing_lows": request.form.get("swing_lows", ""),
+        "breakout_level": request.form.get("breakout_level", ""),
+        "retest_level": request.form.get("retest_level", ""),
+        "trend_direction": request.form.get("trend_direction", "auto"),
+        "ssa_score": request.form.get("ssa_score", ""),
+        "upas_score": request.form.get("upas_score", ""),
     }
     result = None
     output = None
@@ -1008,6 +1131,7 @@ def index():
     snapshot = None
     checklist_items = []
     upas_analysis = None
+    wave_analysis = None
     summary_details = []
     why_no_trade = []
     live_status = None
@@ -1034,10 +1158,11 @@ def index():
             )
 
             if form["data_source"] == "mt5":
-                selected_system = "UPAS Trade Assistant" if form["analysis_system"] == "upas" else "Smart System A"
+                selected_system = display_system_name(form["analysis_system"])
                 requested_mt5_system = selected_system
                 if mt5_bridge_configured():
-                    multi = fetch_mt5_bridge_data(["MN1", "W1", "D1", "H4", "H1"] if form["analysis_system"] == "upas" else ["H4", "H1"])
+                    bridge_timeframes = ["MN1", "W1", "D1", "H4", "H1"] if form["analysis_system"] == "upas" else (["D1", "H4", "H1"] if form["analysis_system"] == "wave" else ["H4", "H1"])
+                    multi = fetch_mt5_bridge_data(bridge_timeframes)
                     if form["analysis_system"] == "upas":
                         upas_input = UPASInput(
                             mn1=multi["MN1"],
@@ -1053,6 +1178,12 @@ def index():
                         summary_details = build_upas_summary(upas_analysis)
                         why_no_trade = build_upas_why_no_trade(upas_analysis)
                         save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]))
+                    elif form["analysis_system"] == "wave":
+                        wave_analysis = analyze_wave_from_multi(multi, form)
+                        result = wave_analysis
+                        output = format_wave_result(wave_analysis)
+                        summary_details = build_wave_summary(wave_analysis)
+                        save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]))
                     else:
                         agent = SmartSystemAAgent()
                         snapshot = agent.analyze_with_snapshot(
@@ -1073,6 +1204,25 @@ def index():
                     create_mt5_request(form["analysis_system"])
                     latest = latest_history("mt5", selected_system)
                     latest_mt5_results = [latest] if latest else []
+            elif form["analysis_system"] == "wave":
+                if form["data_source"] == "live":
+                    h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
+                    live_status = build_live_status([h4_data, h1_data])
+                    multi = {"H4": h4_data, "H1": h1_data}
+                elif has_ohlc:
+                    multi = DataLoader().load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
+                elif has_image:
+                    image_result = ImageInputValidator().validate(BytesIO(image_bytes or b""), chart_image.filename)
+                    multi = {}
+                else:
+                    error = "Wave Structure Analyst requires one OHLC CSV containing H4 or H1 rows, or live data mode."
+                    multi = {}
+                if multi:
+                    wave_analysis = analyze_wave_from_multi(multi, form)
+                    result = wave_analysis
+                    output = format_wave_result(wave_analysis)
+                    summary_details = build_wave_summary(wave_analysis)
+                    save_wave_history(wave_analysis)
             elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
@@ -1162,6 +1312,7 @@ def index():
         snapshot=snapshot,
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
+        wave_analysis=wave_analysis,
         summary_details=summary_details,
         why_no_trade=why_no_trade,
         live_status=live_status,
@@ -1195,7 +1346,7 @@ def history_detail(item_id: int) -> Response:
           <main style="display:block; min-height:calc(100vh - 67px);">
             <section class="workspace">
               <div class="result">
-                <div class="status {{ '' if item.status == 'VALID_TRADE' else 'no-setup' }}">{{ item.status }}</div>
+                <div class="status {{ '' if item.status in ['VALID_TRADE', 'WAVE_CONFIRMED'] else 'no-setup' }}">{{ item.status }}</div>
                 <div class="decision-summary">
                   <h2>Analysis History Detail</h2>
                   <dl class="summary-list">
@@ -1291,6 +1442,45 @@ def history_detail(item_id: int) -> Response:
                           <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
                         {% endfor %}
                       </div>
+                    </div>
+                  </div>
+                {% elif item.system_used == "Wave Structure Analyst" and item.detail %}
+                  <div class="dashboard">
+                    {% if item.detail.mt5_data_status %}
+                      <div class="panel">
+                        <h2 class="panel-title">MT5 Data Status</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Provider</span>{{ item.detail.mt5_data_status.provider }}</div>
+                          <div class="metric"><span>Status</span>{{ item.detail.mt5_data_status.status }}</div>
+                          <div class="metric"><span>Total Candle</span>{{ item.detail.mt5_data_status.total_candles }}</div>
+                          <div class="metric"><span>Volume Data</span>{{ item.detail.mt5_data_status.volume_data }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    <div class="panel">
+                      <h2 class="panel-title">Wave Structure Analyst Result</h2>
+                      <div class="grid">
+                        <div class="metric"><span>Symbol</span>{{ item.detail.symbol }}</div>
+                        <div class="metric"><span>Timeframe</span>{{ item.detail.timeframe }}</div>
+                        <div class="metric"><span>Market Phase</span>{{ item.detail.market_phase }}</div>
+                        <div class="metric"><span>Primary Scenario</span>{{ item.detail.primary_scenario }}</div>
+                        <div class="metric"><span>Alternative Scenario</span>{{ item.detail.alternative_scenario }}</div>
+                        <div class="metric"><span>Direction</span>{{ item.detail.direction }}</div>
+                        <div class="metric"><span>Wave Score</span>{{ item.detail.wave_score }}/10</div>
+                        <div class="metric"><span>Confidence</span>{{ item.detail.confidence }}%</div>
+                        <div class="metric"><span>Risk Level</span>{{ item.detail.risk_level }}</div>
+                        <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias }}</div>
+                        <div class="metric"><span>Invalidation Level</span>{{ item.detail.invalidation_level if item.detail.invalidation_level is not none else "None" }}</div>
+                        <div class="metric"><span>Safety</span>Analysis only</div>
+                      </div>
+                    </div>
+                    <div class="decision-summary">
+                      <h2>Wave Decision Summary</h2>
+                      <dl class="summary-list">
+                        {% for row in item.detail.decision_summary %}
+                          <div class="summary-row"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
+                        {% endfor %}
+                      </dl>
                     </div>
                   </div>
                 {% endif %}
@@ -1410,6 +1600,131 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
     if payload["reasoning"]:
         details.append({"title": "Next Requirement", "detail": payload["reasoning"]})
     return details
+
+
+def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -> WaveAnalysisResult:
+    timeframe = str(form.get("wave_timeframe") or "H4").upper()
+    if timeframe not in multi:
+        if "H4" in multi:
+            timeframe = "H4"
+        elif "H1" in multi:
+            timeframe = "H1"
+        else:
+            raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
+    primary_data = multi[timeframe]
+    current_price = parse_optional_float(str(form.get("current_price") or ""))
+    if current_price is None:
+        current_price = primary_data.candles[-1].close
+    request_data = WaveAnalysisInput(
+        symbol="XAUUSD",
+        timeframe=timeframe,
+        primary_data=primary_data,
+        h4=multi.get("H4"),
+        h1=multi.get("H1"),
+        d1=multi.get("D1"),
+        m30=multi.get("M30"),
+        m15=multi.get("M15"),
+        current_price=current_price,
+        swing_highs=parse_float_list(str(form.get("swing_highs") or "")),
+        swing_lows=parse_float_list(str(form.get("swing_lows") or "")),
+        breakout_level=parse_optional_float(str(form.get("breakout_level") or "")),
+        retest_level=parse_optional_float(str(form.get("retest_level") or "")),
+        trend_direction=str(form.get("trend_direction") or "auto"),
+        smart_system_a_score=str(form.get("ssa_score") or "") or None,
+        upas_score=str(form.get("upas_score") or "") or None,
+    )
+    return WaveStructureAnalyst().analyze(request_data)
+
+
+def parse_optional_float(value: str) -> float | None:
+    value = value.strip()
+    return float(value) if value else None
+
+
+def parse_float_list(value: str) -> list[float]:
+    if not value.strip():
+        return []
+    return [float(part.strip()) for part in value.split(",") if part.strip()]
+
+
+def build_wave_summary(wave: WaveAnalysisResult) -> list[dict[str, object]]:
+    return [
+        {"label": "Decision", "value": wave.status},
+        {"label": "Market Phase", "value": wave.market_phase},
+        {"label": "Primary Scenario", "value": wave.primary_scenario},
+        {"label": "Alternative Scenario", "value": wave.alternative_scenario},
+        {"label": "Direction", "value": wave.direction},
+        {"label": "Wave Score", "value": f"{wave.wave_score}/10"},
+        {"label": "Confidence", "value": f"{wave.confidence}%"},
+        {"label": "Trading Bias", "value": wave.trading_bias},
+        {"label": "Suggested Action", "value": wave.suggested_action},
+        {"label": "Invalidation Level", "value": wave.invalidation_level if wave.invalidation_level is not None else "None"},
+        {"label": "Reason", "value": wave.reason},
+    ]
+
+
+def format_wave_result(wave: WaveAnalysisResult) -> str:
+    invalidation = wave.invalidation_level if wave.invalidation_level is not None else "None"
+    return (
+        "Wave Structure Analyst Result\n\n"
+        f"Symbol:\n{wave.symbol}\n\n"
+        f"Timeframe:\n{wave.timeframe}\n\n"
+        f"Market Phase:\n{wave.market_phase}\n\n"
+        f"Primary Scenario:\n{wave.primary_scenario}\n\n"
+        f"Alternative Scenario:\n{wave.alternative_scenario}\n\n"
+        f"Direction:\n{wave.direction}\n\n"
+        f"Wave Score:\n{wave.wave_score}/10\n\n"
+        f"Confidence:\n{wave.confidence}%\n\n"
+        f"Risk Level:\n{wave.risk_level}\n\n"
+        f"Trading Bias:\n{wave.trading_bias}\n\n"
+        f"Suggested Action:\n{wave.suggested_action}\n\n"
+        f"Invalidation Level:\n{invalidation}\n\n"
+        f"Reason:\n{wave.reason}"
+    )
+
+
+def save_wave_history(
+    wave: WaveAnalysisResult,
+    source: str = "web",
+    mt5_data_status: dict[str, object] | None = None,
+) -> None:
+    detail = {
+        "symbol": wave.symbol,
+        "timeframe": wave.timeframe,
+        "market_phase": wave.market_phase,
+        "primary_scenario": wave.primary_scenario,
+        "alternative_scenario": wave.alternative_scenario,
+        "direction": wave.direction,
+        "wave_score": wave.wave_score,
+        "confidence": wave.confidence,
+        "risk_level": wave.risk_level,
+        "trading_bias": wave.trading_bias,
+        "suggested_action": wave.suggested_action,
+        "invalidation_level": wave.invalidation_level,
+        "reason": wave.reason,
+        "failed_rules": wave.failed_rules,
+        "decision_summary": build_wave_summary(wave),
+    }
+    if mt5_data_status:
+        detail["mt5_data_status"] = mt5_data_status
+    add_history(
+        "Wave Structure Analyst",
+        wave.status,
+        wave.primary_scenario,
+        f"{wave.wave_score}/10",
+        wave.reason,
+        source=source,
+        detail=detail,
+        raw_output=format_wave_result(wave),
+    )
+
+
+def display_system_name(value: str) -> str:
+    if value == "upas":
+        return "UPAS Trade Assistant"
+    if value == "wave":
+        return "Wave Structure Analyst"
+    return "Smart System A"
 
 
 def build_image_preview(image_bytes: bytes, mimetype: str) -> dict[str, str]:

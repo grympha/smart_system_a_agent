@@ -22,6 +22,8 @@ def test_home_page_loads() -> None:
     assert b"Risk Settings" not in response.data
     assert b"SSA CSV Template" in response.data
     assert b"UPAS CSV Template" in response.data
+    assert b"Wave Structure Analyst" in response.data
+    assert b"Wave CSV Template" in response.data
 
 
 def test_api_ping() -> None:
@@ -144,6 +146,55 @@ def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
     assert payload["ok"] is True
     assert payload["analysis_system"] == "Smart System A"
     assert "output" in payload
+
+
+def test_wave_structure_csv_upload_renders_dashboard() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    rows = [
+        (4000, 4014, 3995, 4010),
+        (4010, 4026, 4008, 4022),
+        (4022, 4040, 4020, 4036),
+        (4036, 4056, 4034, 4052),
+        (4052, 4074, 4050, 4070),
+        (4070, 4082, 4064, 4078),
+        (4078, 4080, 4058, 4062),
+        (4062, 4070, 4048, 4052),
+        (4052, 4062, 4046, 4058),
+        (4058, 4090, 4056, 4088),
+        (4088, 4118, 4077, 4110),
+        (4110, 4140, 4108, 4134),
+    ]
+    for idx, (open_, high, low, close) in enumerate(rows):
+        text += f"H4,2026-01-01 {idx:02d}:00,{open_},{high},{low},{close},1000\n"
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={
+            "analysis_system": "wave",
+            "data_source": "csv",
+            "wave_timeframe": "H4",
+            "current_price": "4134",
+            "breakout_level": "4082",
+            "retest_level": "4082",
+            "trend_direction": "bullish",
+            "ohlc_data": (BytesIO(text.encode("utf-8")), "wave.csv"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"Wave Structure Analyst Result" in response.data
+    assert b"Wave 3 Continuation" in response.data
+    assert b"Trading Bias" in response.data
+
+
+def test_wave_template_downloads() -> None:
+    client = app.test_client()
+    response = client.get("/templates/wave.csv")
+
+    assert response.status_code == 200
+    assert b"timeframe,timestamp,open,high,low,close,volume" in response.data
+    assert b"H4" in response.data
 
 
 def test_mt5_direct_mode_shows_waiting_panel(monkeypatch) -> None:
