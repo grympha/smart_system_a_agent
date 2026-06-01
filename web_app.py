@@ -546,11 +546,6 @@ PAGE = """
           <option value="upas" {% if form.analysis_system == "upas" %}selected{% endif %}>UPAS Trade Assistant</option>
           <option value="wave" {% if form.analysis_system == "wave" %}selected{% endif %}>Wave Structure Analyst</option>
         </select>
-        <label for="wave_timeframe">Wave Result View</label>
-        <select id="wave_timeframe" name="wave_timeframe">
-          <option value="H4" {% if form.wave_timeframe == "H4" %}selected{% endif %}>H4 Wave Result</option>
-          <option value="H1" {% if form.wave_timeframe == "H1" %}selected{% endif %}>H1 Wave Result</option>
-        </select>
         <label for="data_source">Data Source</label>
         <select id="data_source" name="data_source">
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
@@ -614,7 +609,7 @@ PAGE = """
                     <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan.stop_loss }}</div>
                   </div>
                 </div>
-              {% elif item.detail and item.detail.trade_plan_display %}
+              {% elif item.detail and item.detail.trade_plan_display and item.detail.trade_plan_display.action %}
                 <div class="panel">
                   <h2 class="panel-title">Trade Plan</h2>
                   <div class="grid">
@@ -716,14 +711,16 @@ PAGE = """
                       {% endfor %}
                     </ul>
                   </div>
-                  <div class="panel">
-                    <h2 class="panel-title">MT5 UPAS Trade Plan</h2>
-                    <div class="grid">
-                      {% for key, value in item.detail.trade_plan.items() %}
-                        <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
-                      {% endfor %}
+                  {% if item.detail.trade_plan_display %}
+                    <div class="panel">
+                      <h2 class="panel-title">MT5 UPAS Trade Plan</h2>
+                      <div class="grid">
+                        {% for key, value in item.detail.trade_plan.items() %}
+                          <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
+                        {% endfor %}
+                      </div>
                     </div>
-                  </div>
+                  {% endif %}
                 </div>
               {% endif %}
             {% endfor %}
@@ -796,24 +793,38 @@ PAGE = """
                   {% endfor %}
                 </ul>
               </div>
-              <div class="panel">
-                <h2 class="panel-title">UPAS Trade Plan</h2>
-                <div class="grid">
-                  {% for key, value in upas_analysis.payload.trade_plan.items() %}
-                    <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
-                  {% endfor %}
+              {% if trade_plan %}
+                <div class="panel">
+                  <h2 class="panel-title">UPAS Trade Plan</h2>
+                  <div class="grid">
+                    {% for key, value in upas_analysis.payload.trade_plan.items() %}
+                      <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
+                    {% endfor %}
+                  </div>
                 </div>
-              </div>
+              {% endif %}
             </div>
           {% elif wave_analysis %}
             <div class="status {{ '' if wave_analysis.status == 'WAVE_CONFIRMED' else 'no-setup' }}">{{ wave_analysis.status }}</div>
             <div class="dashboard">
-              {% if wave_results and wave_results|length > 1 %}
+              {% if wave_results %}
                 <div class="panel">
-                  <h2 class="panel-title">Wave Timeframe Results</h2>
-                  <div class="grid">
+                  <h2 class="panel-title">Wave Structure Results</h2>
+                  <div class="dashboard-grid">
                     {% for tf, wave in wave_results.items() %}
-                      <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                      <div class="panel">
+                        <h2 class="panel-title">{{ tf }} Result</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Status</span>{{ wave.status }}</div>
+                          <div class="metric"><span>Market Phase</span>{{ wave.market_phase }}</div>
+                          <div class="metric"><span>Primary Scenario</span>{{ wave.primary_scenario }}</div>
+                          <div class="metric"><span>Direction</span>{{ wave.direction }}</div>
+                          <div class="metric"><span>Wave Score</span>{{ wave.wave_score }}/10</div>
+                          <div class="metric"><span>Trading Bias</span>{{ wave.trading_bias }}</div>
+                          <div class="metric"><span>Invalidation Level</span>{{ wave.invalidation_level if wave.invalidation_level is not none else "None" }}</div>
+                          <div class="metric"><span>Suggested Action</span>{{ wave.suggested_action }}</div>
+                        </div>
+                      </div>
                     {% endfor %}
                   </div>
                 </div>
@@ -829,23 +840,6 @@ PAGE = """
                   </div>
                 </div>
               {% endif %}
-              <div class="panel">
-                <h2 class="panel-title">Wave Structure Analyst Result</h2>
-                <div class="grid">
-                  <div class="metric"><span>Symbol</span>{{ wave_analysis.symbol }}</div>
-                  <div class="metric"><span>Timeframe</span>{{ wave_analysis.timeframe }}</div>
-                  <div class="metric"><span>Market Phase</span>{{ wave_analysis.market_phase }}</div>
-                  <div class="metric"><span>Primary Scenario</span>{{ wave_analysis.primary_scenario }}</div>
-                  <div class="metric"><span>Alternative Scenario</span>{{ wave_analysis.alternative_scenario }}</div>
-                  <div class="metric"><span>Direction</span>{{ wave_analysis.direction }}</div>
-                  <div class="metric"><span>Wave Score</span>{{ wave_analysis.wave_score }}/10</div>
-                  <div class="metric"><span>Confidence</span>{{ wave_analysis.confidence }}%</div>
-                  <div class="metric"><span>Risk Level</span>{{ wave_analysis.risk_level }}</div>
-                  <div class="metric"><span>Trading Bias</span>{{ wave_analysis.trading_bias }}</div>
-                  <div class="metric"><span>Invalidation Level</span>{{ wave_analysis.invalidation_level if wave_analysis.invalidation_level is not none else "None" }}</div>
-                  <div class="metric"><span>Safety</span>Analysis only</div>
-                </div>
-              </div>
               <div class="decision-summary">
                 <h2>Wave Decision Summary</h2>
                 <dl class="summary-list">
@@ -893,17 +887,6 @@ PAGE = """
             </div>
           {% else %}
             <div class="status no-setup">No Setup</div>
-            {% if trade_plan %}
-              <div class="panel">
-                <h2 class="panel-title">Trade Plan</h2>
-                <div class="grid">
-                  <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
-                  <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
-                  <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
-                  <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
-                </div>
-              </div>
-            {% endif %}
           {% endif %}
           {% if snapshot %}
             <div class="dashboard">
@@ -1094,20 +1077,10 @@ def api_analyze() -> Response:
     try:
         multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
         if analysis_system == "wave":
-            wave_form = {
-                "wave_timeframe": payload.get("timeframe") or ("H4" if "H4" in multi else "H1"),
-                "current_price": str(payload.get("current_price") or ""),
-                "swing_highs": ",".join(str(v) for v in payload.get("swing_highs", [])),
-                "swing_lows": ",".join(str(v) for v in payload.get("swing_lows", [])),
-                "breakout_level": str(payload.get("breakout_level") or ""),
-                "retest_level": str(payload.get("retest_level") or ""),
-                "trend_direction": payload.get("trend_direction") or "auto",
-                "ssa_score": payload.get("ssa_score") or "",
-                "upas_score": payload.get("upas_score") or "",
-            }
             wave_results = analyze_wave_results_from_multi(multi)
-            wave = select_wave_result(wave_results, wave_form)
+            wave = primary_wave_result(wave_results)
             trade_plan = build_wave_trade_plan(wave, multi[wave.timeframe].candles[-1].close)
+            trade_plans = build_wave_trade_plans(wave_results, multi)
             save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]), trade_plan=trade_plan, related_results=wave_results)
             return jsonify(
                 {
@@ -1116,8 +1089,9 @@ def api_analyze() -> Response:
                     "status": wave.status,
                     "result": wave.__dict__,
                     "results": {timeframe: result.__dict__ for timeframe, result in wave_results.items()},
-                    "selected_timeframe": wave.timeframe,
+                    "primary_timeframe": wave.timeframe,
                     "trade_plan": trade_plan,
+                    "trade_plans": trade_plans,
                     "output": format_wave_result(wave),
                     "summary": build_wave_summary(wave, trade_plan),
                 }
@@ -1189,7 +1163,6 @@ def index():
         "symbol": request.form.get("symbol", "XAU/USD"),
         "analysis_system": request.form.get("analysis_system", "ssa"),
         "data_source": request.form.get("data_source", "csv"),
-        "wave_timeframe": request.form.get("wave_timeframe", "H4").upper(),
         "volume_override": request.form.get("volume_override") == "on",
     }
     result = None
@@ -1253,7 +1226,7 @@ def index():
                         save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]))
                     elif form["analysis_system"] == "wave":
                         wave_results = analyze_wave_results_from_multi(multi)
-                        wave_analysis = select_wave_result(wave_results, form)
+                        wave_analysis = primary_wave_result(wave_results)
                         result = wave_analysis
                         output = format_wave_result(wave_analysis)
                         trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
@@ -1295,7 +1268,7 @@ def index():
                     multi = {}
                 if multi:
                     wave_results = analyze_wave_results_from_multi(multi)
-                    wave_analysis = select_wave_result(wave_results, form)
+                    wave_analysis = primary_wave_result(wave_results)
                     result = wave_analysis
                     output = format_wave_result(wave_analysis)
                     trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
@@ -1540,14 +1513,16 @@ def history_detail(item_id: int) -> Response:
                         {% endfor %}
                       </ul>
                     </div>
-                    <div class="panel">
-                      <h2 class="panel-title">UPAS Trade Plan</h2>
-                      <div class="grid">
-                        {% for key, value in item.detail.trade_plan.items() %}
-                          <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
-                        {% endfor %}
+                    {% if item.detail.trade_plan_display %}
+                      <div class="panel">
+                        <h2 class="panel-title">UPAS Trade Plan</h2>
+                        <div class="grid">
+                          {% for key, value in item.detail.trade_plan.items() %}
+                            <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
+                          {% endfor %}
+                        </div>
                       </div>
-                    </div>
+                    {% endif %}
                   </div>
                 {% elif item.system_used == "Wave Structure Analyst" and item.detail %}
                   <div class="dashboard">
@@ -1654,7 +1629,7 @@ def build_checklist_items(snapshot: AnalysisSnapshot) -> list[dict[str, object]]
     ]
 
 
-def build_ssa_trade_plan(snapshot: AnalysisSnapshot) -> dict[str, object]:
+def build_ssa_trade_plan(snapshot: AnalysisSnapshot) -> dict[str, object] | None:
     result = snapshot.result
     if isinstance(result, TradeSetup):
         return {
@@ -1663,41 +1638,30 @@ def build_ssa_trade_plan(snapshot: AnalysisSnapshot) -> dict[str, object]:
             "take_profit": f"TP1 {result.tp1}, TP2 {result.tp2}",
             "stop_loss": result.sl,
         }
-    entry = snapshot.h1.entry_zone if snapshot.h1.entry_zone is not None else "Wait for valid H1 retest zone"
-    return {
-        "action": "WAIT",
-        "entry_point": entry,
-        "take_profit": "Wait until all six SSA conditions pass",
-        "stop_loss": "Wait until valid setup defines SL",
-    }
+    return None
 
 
-def build_upas_trade_plan(upas_analysis: UPASAnalysis) -> dict[str, object]:
+def build_upas_trade_plan(upas_analysis: UPASAnalysis) -> dict[str, object] | None:
     payload = upas_analysis.payload
+    if payload["status"] != "VALID_TRADE":
+        return None
     plan = payload["trade_plan"]
-    action = "ENTER" if payload["status"] == "VALID_TRADE" else "WAIT"
     direction = payload["setup"]["direction"]
-    if action == "ENTER" and direction in {"BUY", "SELL"}:
-        action = f"ENTER {direction}"
+    action = f"ENTER {direction}" if direction in {"BUY", "SELL"} else "ENTER"
     return {
         "action": action,
-        "entry_point": plan["entry"] if plan["entry"] is not None else "Wait for valid UPAS entry trigger",
-        "take_profit": plan["take_profit"] if plan["take_profit"] is not None else "Wait until UPAS reward:risk is valid",
-        "stop_loss": plan["stop_loss"] if plan["stop_loss"] is not None else "Wait until UPAS invalidation is defined",
+        "entry_point": plan["entry"],
+        "take_profit": plan["take_profit"],
+        "stop_loss": plan["stop_loss"],
     }
 
 
-def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None = None) -> dict[str, object]:
+def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None = None) -> dict[str, object] | None:
     direction = wave.trading_bias
     entry = round(current_price, 3) if current_price is not None else "Latest close on selected timeframe"
     stop = wave.invalidation_level
     if wave.status != "WAVE_CONFIRMED" or direction not in {"BUY", "SELL"} or stop is None or current_price is None:
-        return {
-            "action": "WAIT",
-            "entry_point": f"Wait for {wave.timeframe} Wave 3 confirmation and protected retest",
-            "take_profit": "Wait until wave confirmation gives a valid 1:2 target",
-            "stop_loss": stop if stop is not None else "Wait until invalidation level is clear",
-        }
+        return None
     risk = abs(current_price - stop)
     target = current_price + 2 * risk if direction == "BUY" else current_price - 2 * risk
     return {
@@ -1708,15 +1672,24 @@ def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None 
     }
 
 
+def build_wave_trade_plans(
+    wave_results: dict[str, WaveAnalysisResult],
+    multi: dict[str, object],
+) -> dict[str, dict[str, object]]:
+    plans = {}
+    for timeframe, wave in wave_results.items():
+        if timeframe in multi:
+            plan = build_wave_trade_plan(wave, multi[timeframe].candles[-1].close)
+            if plan:
+                plans[timeframe] = plan
+    return plans
+
+
 def build_ssa_summary(snapshot: AnalysisSnapshot, trade_plan: dict[str, object] | None = None) -> list[dict[str, object]]:
     result = snapshot.result
     if isinstance(result, NoSetupResult):
         details = [
             {"label": "Decision", "value": "No setup"},
-            {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else "WAIT"},
-            {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else "Wait"},
-            {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else "Wait"},
-            {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else "Wait"},
             {"label": "Failed Rules", "value": "; ".join(result.failed_rules)},
             {"label": "H4 Wave Position", "value": result.h4_wave_position},
             {"label": "Active Wave", "value": result.active_wave if result.active_wave is not None else "Unidentifiable"},
@@ -1727,7 +1700,6 @@ def build_ssa_summary(snapshot: AnalysisSnapshot, trade_plan: dict[str, object] 
         return details
     return [
         {"label": "Decision", "value": "Valid setup"},
-        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else "ENTER"},
         {"label": "Setup Type", "value": result.setup_type},
         {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else result.entry},
         {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else f"TP1 {result.tp1}, TP2 {result.tp2}"},
@@ -1747,10 +1719,6 @@ def build_upas_summary(upas_analysis: UPASAnalysis, trade_plan: dict[str, object
     ]
     details = [
         {"label": "Decision", "value": payload["status"]},
-        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else payload["status"]},
-        {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else payload["trade_plan"]["entry"]},
-        {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else payload["trade_plan"]["take_profit"]},
-        {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else payload["trade_plan"]["stop_loss"]},
         {"label": "Setup", "value": f"{payload['setup']['name']} {payload['setup']['direction']}"},
         {"label": "Confluence Score", "value": f"{payload['setup']['confluence_score']}/5"},
         {"label": "Failed Conditions", "value": "; ".join(failed) if failed else "None"},
@@ -1804,17 +1772,18 @@ def analyze_wave_results_from_multi(multi: dict[str, object]) -> dict[str, WaveA
     return results
 
 
-def select_wave_result(results: dict[str, WaveAnalysisResult], form: dict[str, object]) -> WaveAnalysisResult:
-    selected = str(form.get("wave_timeframe") or "H4").upper()
-    if selected in results:
-        return results[selected]
+def primary_wave_result(results: dict[str, WaveAnalysisResult]) -> WaveAnalysisResult:
+    for timeframe in ["H4", "H1"]:
+        wave = results.get(timeframe)
+        if wave and wave.status == "WAVE_CONFIRMED":
+            return wave
     if "H4" in results:
         return results["H4"]
     return next(iter(results.values()))
 
 
 def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -> WaveAnalysisResult:
-    return select_wave_result(analyze_wave_results_from_multi(multi), form)
+    return primary_wave_result(analyze_wave_results_from_multi(multi))
 
 
 def analyze_wave_timeframe(multi: dict[str, object], timeframe: str) -> WaveAnalysisResult:
@@ -1882,12 +1851,8 @@ def infer_wave_trend(candles: list[object]) -> str:
 
 
 def build_wave_summary(wave: WaveAnalysisResult, trade_plan: dict[str, object] | None = None) -> list[dict[str, object]]:
-    return [
+    details = [
         {"label": "Decision", "value": wave.status},
-        {"label": "Trade Plan", "value": trade_plan["action"] if trade_plan else ("ENTER" if wave.status == "WAVE_CONFIRMED" else "WAIT")},
-        {"label": "Entry Point", "value": trade_plan["entry_point"] if trade_plan else "Selected timeframe latest close"},
-        {"label": "Take Profit", "value": trade_plan["take_profit"] if trade_plan else "Requires valid wave confirmation"},
-        {"label": "Stop Loss", "value": trade_plan["stop_loss"] if trade_plan else (wave.invalidation_level if wave.invalidation_level is not None else "None")},
         {"label": "Market Phase", "value": wave.market_phase},
         {"label": "Primary Scenario", "value": wave.primary_scenario},
         {"label": "Alternative Scenario", "value": wave.alternative_scenario},
@@ -1899,6 +1864,13 @@ def build_wave_summary(wave: WaveAnalysisResult, trade_plan: dict[str, object] |
         {"label": "Invalidation Level", "value": wave.invalidation_level if wave.invalidation_level is not None else "None"},
         {"label": "Reason", "value": wave.reason},
     ]
+    if trade_plan:
+        details[1:1] = [
+            {"label": "Entry Point", "value": trade_plan["entry_point"]},
+            {"label": "Take Profit", "value": trade_plan["take_profit"]},
+            {"label": "Stop Loss", "value": trade_plan["stop_loss"]},
+        ]
+    return details
 
 
 def format_wave_result(wave: WaveAnalysisResult) -> str:

@@ -13,9 +13,9 @@ def test_buy_sl_tp_calculation() -> None:
         "Standard",
         "test",
     )
-    assert setup.sl == 4125
-    assert setup.tp1 == 4205
-    assert setup.tp2 == 4245
+    assert setup.sl == 4155
+    assert setup.tp1 == 4175
+    assert setup.tp2 == 4185
 
 
 def test_sell_sl_tp_calculation() -> None:
@@ -27,9 +27,9 @@ def test_sell_sl_tp_calculation() -> None:
         "Standard",
         "test",
     )
-    assert setup.sl == 4205
-    assert setup.tp1 == 4125
-    assert setup.tp2 == 4085
+    assert setup.sl == 4175
+    assert setup.tp1 == 4155
+    assert setup.tp2 == 4145
 
 
 def test_lot_size_calculation() -> None:
@@ -42,4 +42,4 @@ def test_lot_size_calculation() -> None:
         "test",
     )
     assert setup.risk_amount == 900
-    assert setup.lot_size == 0.225
+    assert setup.lot_size == 0.9

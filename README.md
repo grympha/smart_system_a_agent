@@ -10,7 +10,7 @@ Smart System A Agent is a strict Python analysis tool for XAUUSD. It analyzes H4
 - Applies the six-condition Smart System A checklist.
 - Returns no setup when any SSA rule fails.
 - Calculates XAUUSD SL, TP1, TP2, risk amount, and lot size only after all six conditions pass.
-- Applies FTMO-compatible fixed risk mechanics using `1 pip = 1.00 price movement` and `1 lot = $100 per pip`.
+- Applies FTMO-compatible fixed risk mechanics using `1 pip = 1.00 price movement` for XAUUSD, so `4550` to `4560` is `10` pips, and `1 lot = $100 per pip`.
 
 ## Install
 
@@ -223,10 +223,10 @@ pytest
 ```text
 Setup Type: BUY LIMIT
 Entry: 4125
-SL: 4085
-TP1: 4165
-TP2: 4205
-Pip Distance: 40.0
+SL: 4115
+TP1: 4135
+TP2: 4145
+Pip Distance: 10.0
 Risk %: 1.2
 Lot Size: 0.3
 Confidence Level: High

@@ -24,7 +24,7 @@ def test_home_page_loads() -> None:
     assert b"UPAS CSV Template" in response.data
     assert b"Wave Structure Analyst" in response.data
     assert b"Wave CSV Template" in response.data
-    assert b"Wave Result View" in response.data
+    assert b"Wave Result View" not in response.data
 
 
 def test_api_ping() -> None:
@@ -76,8 +76,6 @@ def test_dashboard_sections_render_for_csv_upload() -> None:
     assert b"H4 Trend And Wave" in response.data
     assert b"H1 Structure And Entry" in response.data
     assert b"Six-Condition SSA Checklist" in response.data
-    assert b"Trade Plan" in response.data
-    assert b"Entry Point" in response.data
     assert b"Decision Summary" in response.data
     assert b"View raw analysis output" in response.data
 
@@ -187,8 +185,9 @@ def test_api_analyze_accepts_mt5_wave_ohlc_csv() -> None:
     assert payload["analysis_system"] == "Wave Structure Analyst"
     assert payload["result"]["timeframe"] == "H4"
     assert set(payload["results"]) == {"H4", "H1"}
-    assert payload["selected_timeframe"] == "H4"
-    assert payload["trade_plan"]["action"] in {"ENTER BUY", "ENTER SELL", "WAIT"}
+    assert payload["primary_timeframe"] == "H4"
+    if payload["trade_plan"]:
+        assert payload["trade_plan"]["action"] in {"ENTER BUY", "ENTER SELL"}
     assert "Wave Structure Analyst Result" in payload["output"]
 
 
@@ -225,13 +224,12 @@ def test_wave_structure_csv_upload_renders_dashboard() -> None:
     assert b"Wave Structure Analyst Result" in response.data
     assert b"Wave 3 Continuation" in response.data
     assert b"Trading Bias" in response.data
-    assert b"Trade Plan" in response.data
-    assert b"Entry Point" in response.data
-    assert b"Stop Loss" in response.data
+    assert b"Wave Structure Results" in response.data
+    assert b"H4 Result" in response.data
     assert b"Swing Highs" not in response.data
 
 
-def test_wave_structure_can_select_h1_result() -> None:
+def test_wave_structure_shows_h4_and_h1_results() -> None:
     text = "timeframe,timestamp,open,high,low,close,volume\n"
     rows = [
         (4000, 4014, 3995, 4010),
@@ -257,15 +255,15 @@ def test_wave_structure_can_select_h1_result() -> None:
         data={
             "analysis_system": "wave",
             "data_source": "csv",
-            "wave_timeframe": "H1",
             "ohlc_data": (BytesIO(text.encode("utf-8")), "wave.csv"),
         },
         content_type="multipart/form-data",
     )
 
     assert response.status_code == 200
-    assert b"Wave Timeframe Results" in response.data
-    assert b"<span>Timeframe</span>H1" in response.data
+    assert b"Wave Structure Results" in response.data
+    assert b"H4 Result" in response.data
+    assert b"H1 Result" in response.data
 
 
 def test_wave_template_downloads() -> None:

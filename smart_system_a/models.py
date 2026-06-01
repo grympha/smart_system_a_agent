@@ -108,7 +108,7 @@ class ChecklistResult:
 
 @dataclass(frozen=True)
 class RiskSettings:
-    sl_pips: float = 40.0
+    sl_pips: float = 10.0
     risk_percent: float = 0.9
     risk_mode: str = "standard"
     volume_override: bool = False
