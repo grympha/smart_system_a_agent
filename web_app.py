@@ -568,9 +568,8 @@ PAGE = """
         </div>
       {% elif mt5_waiting %}
         <div class="result">
-          <div class="status">Waiting for MT5 data</div>
-          <p class="muted">Request sent for {{ requested_mt5_system }}. Keep the MT5 on-demand EA running; it will collect the request and push fresh OHLCV data.</p>
           {% if latest_mt5_results %}
+            <div class="status">Latest MT5 Analysis</div>
             {% for item in latest_mt5_results %}
               <div class="decision-summary">
                 <h2>Latest MT5 Result - {{ item.system_used }}</h2>
@@ -672,6 +671,7 @@ PAGE = """
               {% endif %}
             {% endfor %}
           {% else %}
+            <div class="status">Waiting for MT5 data</div>
             <p class="muted">No MT5 push has been received yet.</p>
           {% endif %}
         </div>

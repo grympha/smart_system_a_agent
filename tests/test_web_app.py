@@ -153,8 +153,9 @@ def test_mt5_direct_mode_shows_waiting_panel() -> None:
     )
 
     assert response.status_code == 200
-    assert b"Waiting for MT5 data" in response.data
+    assert b"Waiting for MT5 data" in response.data or b"Latest MT5 Analysis" in response.data
     assert b"No MT5 push has been received yet" in response.data or b"Latest MT5 Result" in response.data
+    assert b"Keep the MT5 on-demand EA running" not in response.data
 
 
 def test_mt5_direct_mode_creates_on_demand_request() -> None:
@@ -214,6 +215,8 @@ def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
     assert b"MT5 SSA H4 Trend And Wave" in response.data
     assert b"MT5 SSA Checklist" in response.data
     assert b"Latest MT5 Result - UPAS Trade Assistant" not in response.data
+    assert b"Waiting for MT5 data" not in response.data
+    assert b"Keep the MT5 on-demand EA running" not in response.data
 
 
 def test_mt5_direct_mode_filters_to_selected_upas_system() -> None:
