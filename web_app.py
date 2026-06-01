@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, render_template_string, request
 
 from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from mt5_requests import consume_next_mt5_request, create_mt5_request
-from screenshot_store import add_chart_screenshot, get_chart_screenshot, screenshot_bytes
+from screenshot_store import add_chart_screenshot, get_chart_screenshot, latest_chart_screenshot, screenshot_bytes
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -1330,6 +1330,7 @@ def index():
                 if mt5_bridge_configured():
                     bridge_timeframes = ["MN1", "W1", "D1", "H4", "H1"] if form["analysis_system"] == "upas" else (["D1", "H4", "H1"] if form["analysis_system"] == "wave" else ["H4", "H1"])
                     multi = fetch_mt5_bridge_data(bridge_timeframes)
+                    market_snapshot, chart_snapshot = build_mt5_direct_market_context(multi, form["analysis_system"], form["symbol"])
                     if form["analysis_system"] == "upas":
                         upas_input = UPASInput(
                             mn1=multi["MN1"],
@@ -1345,7 +1346,7 @@ def index():
                         trade_plan = build_upas_trade_plan(upas_analysis)
                         summary_details = build_upas_summary(upas_analysis, trade_plan)
                         why_no_trade = build_upas_why_no_trade(upas_analysis)
-                        save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]))
+                        save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]), market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
                     elif form["analysis_system"] == "wave":
                         wave_results = analyze_wave_results_from_multi(multi)
                         wave_analysis = primary_wave_result(wave_results)
@@ -1353,7 +1354,7 @@ def index():
                         output = format_wave_result(wave_analysis)
                         trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
                         summary_details = build_wave_summary(wave_analysis, trade_plan)
-                        save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]), trade_plan=trade_plan, related_results=wave_results)
+                        save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]), trade_plan=trade_plan, related_results=wave_results, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
                     else:
                         agent = SmartSystemAAgent()
                         snapshot = agent.analyze_with_snapshot(
@@ -1369,7 +1370,7 @@ def index():
                         trade_plan = build_ssa_trade_plan(snapshot)
                         summary_details = build_ssa_summary(snapshot, trade_plan)
                         why_no_trade = build_ssa_why_no_trade(snapshot)
-                        save_ssa_history(snapshot, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]))
+                        save_ssa_history(snapshot, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]), market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
                 else:
                     mt5_waiting = True
                     create_mt5_request(form["analysis_system"])
@@ -2175,6 +2176,41 @@ def build_market_snapshot(
     }
 
 
+def build_mt5_direct_market_context(
+    multi: dict[str, object],
+    analysis_system: str,
+    symbol: str,
+) -> tuple[dict[str, object], dict[str, object] | None]:
+    bridge_snapshot = fetch_mt5_bridge_snapshot()
+    current_price = bridge_snapshot.get("current_price")
+    timestamp = bridge_snapshot.get("timestamp")
+    if current_price is None or not timestamp:
+        latest_candle = latest_candle_from_multi(multi)
+        if latest_candle:
+            current_price = latest_candle.close
+            timestamp = latest_candle.timestamp
+
+    display_name = display_system_name(analysis_system)
+    chart_snapshot = latest_chart_screenshot(symbol, display_name)
+    normalized_symbol = normalize_symbol(symbol)
+    if not chart_snapshot and normalized_symbol != symbol:
+        chart_snapshot = latest_chart_screenshot(normalized_symbol, display_name)
+    if chart_snapshot:
+        chart_snapshot.pop("image_base64", None)
+        chart_snapshot["image_url"] = f"/screenshots/{chart_snapshot['id']}"
+    return build_market_snapshot(current_price, str(timestamp or malaysia_now_text()), chart_snapshot), chart_snapshot
+
+
+def latest_candle_from_multi(multi: dict[str, object]) -> object | None:
+    preferred = multi.get("H1") or next(iter(multi.values()), None)
+    candles = getattr(preferred, "candles", []) if preferred else []
+    return candles[-1] if candles else None
+
+
+def normalize_symbol(symbol: str) -> str:
+    return symbol.replace("/", "").replace(" ", "").upper()
+
+
 def build_live_status(datasets: list[object]) -> dict[str, object]:
     candles = [candle for data in datasets for candle in data.candles]
     last_candle_time = candles[-1].timestamp if candles else "n/a"
@@ -2290,6 +2326,20 @@ def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 200) -> dict[str, 
         csv_parts.extend(lines[1:])
     combined_csv = "\n".join(csv_parts) + "\n"
     return DataLoader().load_multi_timeframe_csv_stream(StringIO(combined_csv), "XAUUSD")
+
+
+def fetch_mt5_bridge_snapshot() -> dict[str, object]:
+    base_url = (os.getenv("MT5_BRIDGE_URL") or "").rstrip("/")
+    api_key = os.getenv("MT5_BRIDGE_API_KEY") or ""
+    if not base_url or not api_key:
+        return {}
+    try:
+        payload = fetch_mt5_bridge_json(f"{base_url}/api/mt5/xauusd/snapshot", api_key)
+    except ValueError:
+        return {}
+    if not payload.get("ok"):
+        return {}
+    return payload
 
 
 def fetch_mt5_bridge_json(url: str, api_key: str) -> dict[str, object]:

@@ -118,6 +118,49 @@ def test_upas_selector_renders_upas_dashboard() -> None:
     assert b"View raw analysis output" in response.data
 
 
+def test_mt5_direct_mode_renders_market_snapshot_and_latest_chart(monkeypatch) -> None:
+    def fake_multi(timeframes: list[str], limit: int = 200) -> dict[str, object]:
+        return {
+            "MN1": trend_data("MN1"),
+            "W1": trend_data("W1"),
+            "D1": trend_data("D1"),
+            "H4": h4_last_kiss(),
+            "H1": h1_confirmation(),
+        }
+
+    buffer = BytesIO()
+    Image.new("RGB", (32, 18), color="white").save(buffer, format="PNG")
+    chart = web_module.add_chart_screenshot(
+        symbol="XAUUSD",
+        analysis_system="UPAS Trade Assistant",
+        market_timestamp="2026-06-01T15:30:00",
+        current_price=3368.45,
+        filename="XAUUSD_H1_20260601_153000.png",
+        image_base64=base64.b64encode(buffer.getvalue()).decode("ascii"),
+        metadata={"timeframe": "H1"},
+    )
+    monkeypatch.setattr(web_module, "mt5_bridge_configured", lambda: True)
+    monkeypatch.setattr(web_module, "fetch_mt5_bridge_data", fake_multi)
+    monkeypatch.setattr(
+        web_module,
+        "fetch_mt5_bridge_snapshot",
+        lambda: {"ok": True, "current_price": 3368.45, "timestamp": "2026-06-01T15:30:00"},
+    )
+
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={"analysis_system": "upas", "data_source": "mt5", "symbol": "XAU/USD"},
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"Market Snapshot" in response.data
+    assert b"3368.45" in response.data
+    assert b"Latest Chart Preview" in response.data
+    assert chart["image_url"].encode() in response.data
+
+
 def test_template_downloads() -> None:
     client = app.test_client()
 

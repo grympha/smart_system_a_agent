@@ -134,6 +134,31 @@ def create_bridge_app() -> Flask:
             }
         )
 
+    @app.get("/api/mt5/xauusd/snapshot")
+    def mt5_xauusd_snapshot() -> Response | tuple[Response, int]:
+        mt5, error = _ready_mt5()
+        if error:
+            return jsonify_error(error, 503)
+        symbol_error = _ensure_symbol(mt5, SYMBOL)
+        if symbol_error:
+            return jsonify_error(symbol_error, 503)
+
+        tick = mt5.symbol_info_tick(SYMBOL)
+        if tick is None:
+            return jsonify_error(f"No current tick returned for {SYMBOL}.", 503)
+        current_price = float(tick.bid or tick.last or tick.ask or 0)
+        timestamp = datetime.fromtimestamp(int(tick.time)).strftime("%Y-%m-%dT%H:%M:%S")
+        return jsonify(
+            {
+                "ok": True,
+                "read_only": True,
+                "symbol": SYMBOL,
+                "current_price": current_price,
+                "timestamp": timestamp,
+                "chart_available": False,
+            }
+        )
+
     return app
 
 
