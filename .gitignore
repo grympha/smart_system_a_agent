@@ -26,3 +26,4 @@ tools/
 instance/
 .DS_Store
 Thumbs.db
+*.ex5

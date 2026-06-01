@@ -185,6 +185,16 @@ The EA pushes all three analysis systems:
 - UPAS: MN1, W1, D1, H4, and H1
 - Wave Structure Analyst: D1, H4, and H1
 
+Each API push also includes a market snapshot:
+
+- current XAUUSD price from `SYMBOL_BID` or `SYMBOL_LAST`
+- MT5 timestamp in ISO format
+- 1280 x 720 chart screenshot saved under `MQL5/Files/GoldSmartAgent/`
+- screenshot filename such as `XAUUSD_H1_20260601_153000.png`
+- base64 PNG screenshot in the JSON payload
+
+The screenshot captures the active chart, including candlesticks, indicators, trendlines, and user drawings. Attach the EA to the chart view you want sent. Screenshot history is stored by analysis engine and pruned to the latest 20 images per engine for future image-AI modules such as Elliott Wave recognition, SNR detection, trendline detection, breakout detection, candlestick pattern detection, and price-action validation. These image-AI modules are not active yet.
+
 Server endpoint:
 
 ```text

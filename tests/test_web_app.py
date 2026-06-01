@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from io import BytesIO
 
 from PIL import Image
@@ -151,6 +152,42 @@ def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
     assert payload["analysis_system"] == "Smart System A"
     assert payload["trade_plan"]["action"] in {"ENTER BUY LIMIT", "ENTER SELL LIMIT", "WAIT"}
     assert "output" in payload
+
+
+def test_api_analyze_stores_market_snapshot_and_chart_image() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+    buffer = BytesIO()
+    Image.new("RGB", (32, 18), color="white").save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    client = app.test_client()
+    response = client.post(
+        "/api/analyze",
+        json={
+            "analysis_system": "ssa",
+            "symbol": "XAUUSD",
+            "current_price": 3368.45,
+            "timestamp": "2026-06-01T15:30:00",
+            "chart_timeframe": "H1",
+            "chart_filename": "XAUUSD_H1_20260601_153000.png",
+            "chart_image": encoded,
+            "ohlc_csv": text,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["market_snapshot"]["current_price"] == 3368.45
+    assert payload["market_snapshot"]["chart_available"] == "Yes"
+    assert payload["chart_snapshot"]["symbol"] == "XAUUSD"
+    assert payload["chart_snapshot"]["metadata"]["timeframe"] == "H1"
+
+    image_response = client.get(payload["chart_snapshot"]["image_url"])
+    assert image_response.status_code == 200
+    assert image_response.mimetype == "image/png"
 
 
 def test_api_analyze_accepts_mt5_wave_ohlc_csv() -> None:

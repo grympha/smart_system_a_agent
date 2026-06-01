@@ -13,6 +13,7 @@ from flask import Flask, Response, jsonify, render_template_string, request
 
 from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from mt5_requests import consume_next_mt5_request, create_mt5_request
+from screenshot_store import add_chart_screenshot, get_chart_screenshot, screenshot_bytes
 from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
@@ -25,7 +26,7 @@ from wave_structure import WaveAnalysisInput, WaveAnalysisResult, WaveStructureA
 
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 
 PAGE = """
@@ -599,6 +600,29 @@ PAGE = """
                   </div>
                 </div>
               {% endif %}
+              {% if item.detail and item.detail.market_snapshot %}
+                <div class="panel">
+                  <h2 class="panel-title">Market Snapshot</h2>
+                  <div class="grid">
+                    <div class="metric"><span>Current Price</span>{{ item.detail.market_snapshot.current_price }}</div>
+                    <div class="metric"><span>Chart Available</span>{{ item.detail.market_snapshot.chart_available }}</div>
+                    <div class="metric"><span>Last Chart Update</span>{{ item.detail.market_snapshot.last_chart_update }}</div>
+                  </div>
+                </div>
+              {% endif %}
+              {% if item.detail and item.detail.chart_snapshot %}
+                <div class="panel">
+                  <h2 class="panel-title">Latest Chart Preview</h2>
+                  <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                    <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
+                  </a>
+                  <div class="grid">
+                    <div class="metric"><span>Symbol</span>{{ item.detail.chart_snapshot.symbol }}</div>
+                    <div class="metric"><span>Timeframe</span>{{ item.detail.chart_snapshot.metadata.timeframe or "H1" }}</div>
+                    <div class="metric"><span>Timestamp</span>{{ item.detail.chart_snapshot.market_timestamp }}</div>
+                  </div>
+                </div>
+              {% endif %}
               {% if item.detail and item.detail.trade_plan and item.detail.trade_plan.action %}
                 <div class="panel">
                   <h2 class="panel-title">Trade Plan</h2>
@@ -740,6 +764,29 @@ PAGE = """
                 <div class="metric"><span>Last Candle</span>{{ live_status.last_candle_time }}</div>
                 <div class="metric"><span>Total Candles</span>{{ live_status.total_candles }}</div>
                 <div class="metric"><span>Volume Data</span>{{ live_status.volume_status }}</div>
+              </div>
+            </div>
+          {% endif %}
+          {% if market_snapshot %}
+            <div class="panel">
+              <h2 class="panel-title">Market Snapshot</h2>
+              <div class="grid">
+                <div class="metric"><span>Current Price</span>{{ market_snapshot.current_price }}</div>
+                <div class="metric"><span>Chart Available</span>{{ market_snapshot.chart_available }}</div>
+                <div class="metric"><span>Last Chart Update</span>{{ market_snapshot.last_chart_update }}</div>
+              </div>
+            </div>
+          {% endif %}
+          {% if chart_snapshot %}
+            <div class="panel">
+              <h2 class="panel-title">Latest Chart Preview</h2>
+              <a href="{{ chart_snapshot.image_url }}" target="_blank">
+                <img class="image-preview" src="{{ chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
+              </a>
+              <div class="grid">
+                <div class="metric"><span>Symbol</span>{{ chart_snapshot.symbol }}</div>
+                <div class="metric"><span>Timeframe</span>{{ chart_snapshot.metadata.timeframe or "H1" }}</div>
+                <div class="metric"><span>Timestamp</span>{{ chart_snapshot.market_timestamp }}</div>
               </div>
             </div>
           {% endif %}
@@ -1066,6 +1113,58 @@ def download_wave_template() -> Response:
     )
 
 
+@app.get("/screenshots/<int:screenshot_id>")
+def chart_screenshot(screenshot_id: int) -> Response:
+    item = get_chart_screenshot(screenshot_id)
+    if not item:
+        return Response("Screenshot not found.", status=404, mimetype="text/plain")
+    return Response(
+        screenshot_bytes(item),
+        mimetype=item["mime_type"],
+        headers={"Content-Disposition": f"inline; filename={item['filename']}"},
+    )
+
+
+def intake_market_context(payload: dict[str, object], analysis_system: str, symbol: str) -> tuple[dict[str, object], dict[str, object] | None]:
+    current_price = payload.get("current_price")
+    timestamp = str(payload.get("timestamp") or malaysia_now_text())
+    chart_image = str(payload.get("chart_image") or "")
+    chart_snapshot = None
+    if chart_image:
+        chart_snapshot = add_chart_screenshot(
+            symbol=symbol,
+            analysis_system=display_system_name(analysis_system),
+            market_timestamp=timestamp,
+            current_price=current_price,
+            filename=str(payload.get("chart_filename") or f"{symbol}_{analysis_system}_chart.png"),
+            image_base64=chart_image,
+            mime_type=str(payload.get("chart_mime_type") or "image/png"),
+            image_source="mt5_api",
+            metadata={
+                "timeframe": payload.get("chart_timeframe") or "H1",
+                "future_ai_ready": {
+                    "elliott_wave_recognition": False,
+                    "snr_detection": False,
+                    "trendline_detection": False,
+                    "breakout_detection": False,
+                    "candlestick_pattern_detection": False,
+                    "price_action_validation": False,
+                },
+            },
+        )
+    market_snapshot = build_market_snapshot(current_price, timestamp, chart_snapshot)
+    return market_snapshot, chart_snapshot
+
+
+def parse_optional_float(value: object) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @app.post("/api/analyze")
 def api_analyze() -> Response:
     payload = request.get_json(silent=True) or {}
@@ -1076,17 +1175,20 @@ def api_analyze() -> Response:
         return jsonify({"status": "ERROR", "message": "ohlc_csv is required."}), 400
 
     try:
+        market_snapshot, chart_snapshot = intake_market_context(payload, analysis_system, symbol)
         multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
         if analysis_system == "wave":
-            wave_results = analyze_wave_results_from_multi(multi)
+            wave_results = analyze_wave_results_from_multi(multi, current_price=parse_optional_float(payload.get("current_price")))
             wave = primary_wave_result(wave_results)
             trade_plan = build_wave_trade_plan(wave, multi[wave.timeframe].candles[-1].close)
             trade_plans = build_wave_trade_plans(wave_results, multi)
-            save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]), trade_plan=trade_plan, related_results=wave_results)
+            save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]), trade_plan=trade_plan, related_results=wave_results, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
             return jsonify(
                 {
                     "ok": True,
                     "analysis_system": "Wave Structure Analyst",
+                    "market_snapshot": market_snapshot,
+                    "chart_snapshot": chart_snapshot,
                     "status": wave.status,
                     "result": wave.__dict__,
                     "results": {timeframe: result.__dict__ for timeframe, result in wave_results.items()},
@@ -1111,11 +1213,13 @@ def api_analyze() -> Response:
             upas_analysis = UPASAgent().analyze(upas_input)
             trade_plan = build_upas_trade_plan(upas_analysis)
             mt5_status = build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]])
-            save_upas_history(upas_analysis, source="mt5", mt5_data_status=mt5_status)
+            save_upas_history(upas_analysis, source="mt5", mt5_data_status=mt5_status, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
             return jsonify(
                 {
                     "ok": True,
                     "analysis_system": "UPAS Trade Assistant",
+                    "market_snapshot": market_snapshot,
+                    "chart_snapshot": chart_snapshot,
                     "result": upas_analysis.payload,
                     "trade_plan": trade_plan,
                     "output": upas_analysis.summary,
@@ -1134,11 +1238,13 @@ def api_analyze() -> Response:
         )
         mt5_status = build_mt5_data_status([multi["H4"], multi["H1"]])
         trade_plan = build_ssa_trade_plan(snapshot)
-        save_ssa_history(snapshot, source="mt5", mt5_data_status=mt5_status)
+        save_ssa_history(snapshot, source="mt5", mt5_data_status=mt5_status, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
         return jsonify(
             {
                 "ok": True,
                 "analysis_system": "Smart System A",
+                "market_snapshot": market_snapshot,
+                "chart_snapshot": chart_snapshot,
                 "status": "VALID_TRADE" if isinstance(snapshot.result, TradeSetup) else "NO_TRADE",
                 "trade_plan": trade_plan,
                 "output": agent.format_result(snapshot.result),
@@ -1181,6 +1287,8 @@ def index():
     summary_details = []
     why_no_trade = []
     live_status = None
+    market_snapshot = None
+    chart_snapshot = None
     mt5_waiting = False
     latest_mt5_results = []
     requested_mt5_system = None
@@ -1195,6 +1303,19 @@ def index():
             if has_image:
                 image_bytes = chart_image.read()
                 image_preview = build_image_preview(image_bytes, chart_image.mimetype or "image/png")
+                if has_ohlc:
+                    chart_snapshot = add_chart_screenshot(
+                        symbol=form["symbol"],
+                        analysis_system=display_system_name(form["analysis_system"]),
+                        market_timestamp=malaysia_now_text(),
+                        current_price=None,
+                        filename=chart_image.filename,
+                        image_base64=base64.b64encode(image_bytes).decode("ascii"),
+                        mime_type=chart_image.mimetype or "image/png",
+                        image_source="web_upload",
+                        metadata={"timeframe": "uploaded"},
+                    )
+                    market_snapshot = build_market_snapshot(None, None, chart_snapshot)
 
             risk_percent = float(form["risk_percent"]) if form["risk_percent"] else None
             settings = RiskSettings(
@@ -1373,6 +1494,8 @@ def index():
         summary_details=summary_details,
         why_no_trade=why_no_trade,
         live_status=live_status,
+        market_snapshot=market_snapshot,
+        chart_snapshot=chart_snapshot,
         history=recent_history(),
         mt5_waiting=mt5_waiting,
         latest_mt5_results=latest_mt5_results,
@@ -1417,6 +1540,24 @@ def history_detail(item_id: int) -> Response:
                 </div>
                 {% if item.system_used == "Smart System A" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.market_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Market Snapshot</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Current Price</span>{{ item.detail.market_snapshot.current_price }}</div>
+                          <div class="metric"><span>Chart Available</span>{{ item.detail.market_snapshot.chart_available }}</div>
+                          <div class="metric"><span>Last Chart Update</span>{{ item.detail.market_snapshot.last_chart_update }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if item.detail.chart_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Latest Chart Preview</h2>
+                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                          <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
+                        </a>
+                      </div>
+                    {% endif %}
                     {% if item.detail.trade_plan and item.detail.trade_plan.action %}
                       <div class="panel">
                         <h2 class="panel-title">Trade Plan</h2>
@@ -1462,6 +1603,24 @@ def history_detail(item_id: int) -> Response:
                   </div>
                 {% elif item.system_used == "UPAS Trade Assistant" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.market_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Market Snapshot</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Current Price</span>{{ item.detail.market_snapshot.current_price }}</div>
+                          <div class="metric"><span>Chart Available</span>{{ item.detail.market_snapshot.chart_available }}</div>
+                          <div class="metric"><span>Last Chart Update</span>{{ item.detail.market_snapshot.last_chart_update }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if item.detail.chart_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Latest Chart Preview</h2>
+                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                          <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
+                        </a>
+                      </div>
+                    {% endif %}
                     {% if item.detail.trade_plan_display %}
                       <div class="panel">
                         <h2 class="panel-title">Trade Plan</h2>
@@ -1527,6 +1686,24 @@ def history_detail(item_id: int) -> Response:
                   </div>
                 {% elif item.system_used == "Wave Structure Analyst" and item.detail %}
                   <div class="dashboard">
+                    {% if item.detail.market_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Market Snapshot</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Current Price</span>{{ item.detail.market_snapshot.current_price }}</div>
+                          <div class="metric"><span>Chart Available</span>{{ item.detail.market_snapshot.chart_available }}</div>
+                          <div class="metric"><span>Last Chart Update</span>{{ item.detail.market_snapshot.last_chart_update }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if item.detail.chart_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Latest Chart Preview</h2>
+                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                          <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
+                        </a>
+                      </div>
+                    {% endif %}
                     {% if item.detail.timeframe_results %}
                       <div class="panel">
                         <h2 class="panel-title">Wave Timeframe Results</h2>
@@ -1766,11 +1943,14 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
     return details
 
 
-def analyze_wave_results_from_multi(multi: dict[str, object]) -> dict[str, WaveAnalysisResult]:
+def analyze_wave_results_from_multi(
+    multi: dict[str, object],
+    current_price: float | None = None,
+) -> dict[str, WaveAnalysisResult]:
     results = {}
     for timeframe in ["H4", "H1"]:
         if timeframe in multi:
-            results[timeframe] = analyze_wave_timeframe(multi, timeframe)
+            results[timeframe] = analyze_wave_timeframe(multi, timeframe, current_price=current_price)
     if not results:
         raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
     return results
@@ -1790,11 +1970,15 @@ def analyze_wave_from_multi(multi: dict[str, object], form: dict[str, object]) -
     return primary_wave_result(analyze_wave_results_from_multi(multi))
 
 
-def analyze_wave_timeframe(multi: dict[str, object], timeframe: str) -> WaveAnalysisResult:
+def analyze_wave_timeframe(
+    multi: dict[str, object],
+    timeframe: str,
+    current_price: float | None = None,
+) -> WaveAnalysisResult:
     if timeframe not in multi:
         raise ValueError("Wave Structure Analyst requires H4 or H1 OHLC rows.")
     primary_data = multi[timeframe]
-    current_price = primary_data.candles[-1].close
+    current_price = current_price if current_price is not None else primary_data.candles[-1].close
     swing_highs, swing_lows = derive_swings(primary_data.candles)
     trend_direction = infer_wave_trend(primary_data.candles)
     breakout_level = swing_highs[-2] if trend_direction == "bullish" and len(swing_highs) >= 2 else None
@@ -1905,6 +2089,8 @@ def save_wave_history(
     mt5_data_status: dict[str, object] | None = None,
     trade_plan: dict[str, object] | None = None,
     related_results: dict[str, WaveAnalysisResult] | None = None,
+    market_snapshot: dict[str, object] | None = None,
+    chart_snapshot: dict[str, object] | None = None,
 ) -> None:
     trade_plan = trade_plan or build_wave_trade_plan(wave)
     detail = {
@@ -1942,6 +2128,10 @@ def save_wave_history(
     }
     if mt5_data_status:
         detail["mt5_data_status"] = mt5_data_status
+    if market_snapshot:
+        detail["market_snapshot"] = market_snapshot
+    if chart_snapshot:
+        detail["chart_snapshot"] = chart_snapshot
     add_history(
         "Wave Structure Analyst",
         wave.status,
@@ -1967,6 +2157,24 @@ def build_image_preview(image_bytes: bytes, mimetype: str) -> dict[str, str]:
     return {"data_url": f"data:{mimetype};base64,{encoded}"}
 
 
+def build_market_snapshot(
+    current_price: object | None,
+    timestamp: str | None,
+    chart_snapshot: dict[str, object] | None,
+) -> dict[str, object]:
+    has_price = current_price is not None and current_price != ""
+    return {
+        "current_price": current_price if has_price else "n/a",
+        "timestamp": timestamp or malaysia_now_text(),
+        "chart_available": "Yes" if chart_snapshot else "No",
+        "last_chart_update": chart_snapshot["market_timestamp"] if chart_snapshot else (timestamp or "n/a"),
+        "chart_url": chart_snapshot.get("image_url") if chart_snapshot else None,
+        "chart_symbol": chart_snapshot.get("symbol") if chart_snapshot else None,
+        "chart_timeframe": (chart_snapshot.get("metadata") or {}).get("timeframe") if chart_snapshot else None,
+        "chart_filename": chart_snapshot.get("filename") if chart_snapshot else None,
+    }
+
+
 def build_live_status(datasets: list[object]) -> dict[str, object]:
     candles = [candle for data in datasets for candle in data.candles]
     last_candle_time = candles[-1].timestamp if candles else "n/a"
@@ -1985,6 +2193,8 @@ def save_ssa_history(
     snapshot: AnalysisSnapshot,
     source: str = "web",
     mt5_data_status: dict[str, object] | None = None,
+    market_snapshot: dict[str, object] | None = None,
+    chart_snapshot: dict[str, object] | None = None,
 ) -> None:
     result = snapshot.result
     trade_plan = build_ssa_trade_plan(snapshot)
@@ -2010,6 +2220,10 @@ def save_ssa_history(
     }
     if mt5_data_status:
         detail["mt5_data_status"] = mt5_data_status
+    if market_snapshot:
+        detail["market_snapshot"] = market_snapshot
+    if chart_snapshot:
+        detail["chart_snapshot"] = chart_snapshot
     add_history("Smart System A", status, setup_name, score, summary, source=source, detail=detail, raw_output=raw_output)
 
 
@@ -2017,12 +2231,18 @@ def save_upas_history(
     upas_analysis: UPASAnalysis,
     source: str = "web",
     mt5_data_status: dict[str, object] | None = None,
+    market_snapshot: dict[str, object] | None = None,
+    chart_snapshot: dict[str, object] | None = None,
 ) -> None:
     payload = upas_analysis.payload
     detail = dict(payload)
     detail["trade_plan_display"] = build_upas_trade_plan(upas_analysis)
     if mt5_data_status:
         detail["mt5_data_status"] = mt5_data_status
+    if market_snapshot:
+        detail["market_snapshot"] = market_snapshot
+    if chart_snapshot:
+        detail["chart_snapshot"] = chart_snapshot
     add_history(
         "UPAS Trade Assistant",
         payload["status"],
