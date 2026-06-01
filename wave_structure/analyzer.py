@@ -78,6 +78,7 @@ class WaveStructureAnalyst:
             risk="Low" if score >= 8 else "Medium",
             bias=bias,
             action="Prepare for BUY only after pullback/retest remains protected." if bias == "BUY" else "Wait for stronger breakout and retest confirmation.",
+            entry_zone=retest_level if score >= 8 else None,
             invalidation=min(recent_lows),
             reason=(
                 f"Bullish structure checks Wave 1 high {wave1_high}, Wave 1 low {wave1_low}, "
@@ -114,6 +115,7 @@ class WaveStructureAnalyst:
             risk="Low" if score >= 8 else "Medium",
             bias=bias,
             action="Prepare for SELL only after pullback/retest remains protected." if bias == "SELL" else "Wait for stronger breakdown and retest confirmation.",
+            entry_zone=retest_level if score >= 8 else None,
             invalidation=max(recent_highs),
             reason=(
                 f"Bearish structure checks Wave 1 low {wave1_low}, Wave 1 high {wave1_high}, "
@@ -155,6 +157,7 @@ class WaveStructureAnalyst:
             risk="High",
             bias="WAIT",
             action="Avoid early entry. Wait for correction to complete and for a clean breakout/retest confirmation.",
+            entry_zone=None,
             invalidation=invalidation,
             reason=f"Price action is overlapping, momentum has weakened, and continuation is not clean near {current_price}.",
             failed=["No clean Wave 1 breakout continuation", "Retest confirmation missing"],
@@ -181,6 +184,7 @@ class WaveStructureAnalyst:
             risk="High",
             bias="WAIT",
             action="Avoid late entry. Wait for rejection to resolve or for a fresh corrective pullback.",
+            entry_zone=None,
             invalidation=invalidation,
             reason=f"Trend is extended near {current_price}, candle bodies are slowing, and late Wave 5 risk is elevated.",
             failed=["Price appears late in Wave 5", "Late entry risk"],
@@ -197,6 +201,7 @@ class WaveStructureAnalyst:
             risk="High",
             bias="WAIT",
             action="No valid setup. Wait for clear Wave 1 breakout, protected Wave 2, and retest confirmation.",
+            entry_zone=None,
             invalidation=current_price,
             reason="Wave count is unclear; Smart System A and UPAS should not be overridden by this layer.",
             failed=failed,
@@ -213,6 +218,7 @@ class WaveStructureAnalyst:
         risk: str,
         bias: str,
         action: str,
+        entry_zone: float | None,
         invalidation: float | None,
         reason: str,
         failed: list[str],
@@ -229,6 +235,7 @@ class WaveStructureAnalyst:
             risk_level=risk,
             trading_bias=bias if score >= 8 and primary == "Wave 3 Continuation" else "WAIT",
             suggested_action=action,
+            entry_zone=entry_zone,
             invalidation_level=invalidation,
             reason=reason,
             failed_rules=failed,

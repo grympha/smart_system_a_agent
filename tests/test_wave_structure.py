@@ -59,6 +59,7 @@ def test_bullish_wave3_scores_strong_confirmation() -> None:
     assert result.primary_scenario == "Wave 3 Continuation"
     assert result.trading_bias == "BUY"
     assert result.wave_score >= 8
+    assert result.entry_zone == 4082
 
 
 def test_unclear_or_corrective_structure_returns_wait() -> None:

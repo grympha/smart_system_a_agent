@@ -821,6 +821,7 @@ PAGE = """
                           <div class="metric"><span>Direction</span>{{ wave.direction }}</div>
                           <div class="metric"><span>Wave Score</span>{{ wave.wave_score }}/10</div>
                           <div class="metric"><span>Trading Bias</span>{{ wave.trading_bias }}</div>
+                          <div class="metric"><span>Pullback Zone</span>{{ wave.entry_zone if wave.entry_zone is not none else "None" }}</div>
                           <div class="metric"><span>Invalidation Level</span>{{ wave.invalidation_level if wave.invalidation_level is not none else "None" }}</div>
                           <div class="metric"><span>Suggested Action</span>{{ wave.suggested_action }}</div>
                         </div>
@@ -1571,6 +1572,7 @@ def history_detail(item_id: int) -> Response:
                         <div class="metric"><span>Confidence</span>{{ item.detail.confidence }}%</div>
                         <div class="metric"><span>Risk Level</span>{{ item.detail.risk_level }}</div>
                         <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias }}</div>
+                        <div class="metric"><span>Pullback Zone</span>{{ item.detail.entry_zone if item.detail.entry_zone is not none else "None" }}</div>
                         <div class="metric"><span>Invalidation Level</span>{{ item.detail.invalidation_level if item.detail.invalidation_level is not none else "None" }}</div>
                         <div class="metric"><span>Safety</span>Analysis only</div>
                       </div>
@@ -1658,15 +1660,17 @@ def build_upas_trade_plan(upas_analysis: UPASAnalysis) -> dict[str, object] | No
 
 def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None = None) -> dict[str, object] | None:
     direction = wave.trading_bias
-    entry = round(current_price, 3) if current_price is not None else "Latest close on selected timeframe"
+    entry = wave.entry_zone
     stop = wave.invalidation_level
-    if wave.status != "WAVE_CONFIRMED" or direction not in {"BUY", "SELL"} or stop is None or current_price is None:
+    if wave.status != "WAVE_CONFIRMED" or direction not in {"BUY", "SELL"} or stop is None or entry is None:
         return None
-    risk = abs(current_price - stop)
-    target = current_price + 2 * risk if direction == "BUY" else current_price - 2 * risk
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return None
+    target = entry + 2 * risk if direction == "BUY" else entry - 2 * risk
     return {
         "action": f"ENTER {direction}",
-        "entry_point": entry,
+        "entry_point": round(entry, 3),
         "take_profit": round(target, 3),
         "stop_loss": round(stop, 3),
     }
@@ -1860,6 +1864,7 @@ def build_wave_summary(wave: WaveAnalysisResult, trade_plan: dict[str, object] |
         {"label": "Wave Score", "value": f"{wave.wave_score}/10"},
         {"label": "Confidence", "value": f"{wave.confidence}%"},
         {"label": "Trading Bias", "value": wave.trading_bias},
+        {"label": "Pullback Zone", "value": wave.entry_zone if wave.entry_zone is not None else "None"},
         {"label": "Suggested Action", "value": wave.suggested_action},
         {"label": "Invalidation Level", "value": wave.invalidation_level if wave.invalidation_level is not None else "None"},
         {"label": "Reason", "value": wave.reason},
@@ -1887,6 +1892,7 @@ def format_wave_result(wave: WaveAnalysisResult) -> str:
         f"Confidence:\n{wave.confidence}%\n\n"
         f"Risk Level:\n{wave.risk_level}\n\n"
         f"Trading Bias:\n{wave.trading_bias}\n\n"
+        f"Pullback Zone:\n{wave.entry_zone if wave.entry_zone is not None else 'None'}\n\n"
         f"Suggested Action:\n{wave.suggested_action}\n\n"
         f"Invalidation Level:\n{invalidation}\n\n"
         f"Reason:\n{wave.reason}"
@@ -1912,6 +1918,7 @@ def save_wave_history(
         "confidence": wave.confidence,
         "risk_level": wave.risk_level,
         "trading_bias": wave.trading_bias,
+        "entry_zone": wave.entry_zone,
         "suggested_action": wave.suggested_action,
         "invalidation_level": wave.invalidation_level,
         "reason": wave.reason,
@@ -1927,6 +1934,7 @@ def save_wave_history(
                 "wave_score": result.wave_score,
                 "confidence": result.confidence,
                 "trading_bias": result.trading_bias,
+                "entry_zone": result.entry_zone,
                 "invalidation_level": result.invalidation_level,
             }
             for timeframe, result in (related_results or {}).items()

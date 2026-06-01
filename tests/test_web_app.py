@@ -188,6 +188,8 @@ def test_api_analyze_accepts_mt5_wave_ohlc_csv() -> None:
     assert payload["primary_timeframe"] == "H4"
     if payload["trade_plan"]:
         assert payload["trade_plan"]["action"] in {"ENTER BUY", "ENTER SELL"}
+        assert payload["trade_plan"]["entry_point"] == payload["result"]["entry_zone"]
+        assert payload["trade_plan"]["entry_point"] != rows[-1][3]
     assert "Wave Structure Analyst Result" in payload["output"]
 
 

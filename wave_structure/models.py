@@ -38,6 +38,7 @@ class WaveAnalysisResult:
     risk_level: str
     trading_bias: str
     suggested_action: str
+    entry_zone: float | None
     invalidation_level: float | None
     reason: str
     failed_rules: list[str] = field(default_factory=list)
