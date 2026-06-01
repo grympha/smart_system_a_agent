@@ -88,56 +88,99 @@ On Render, add it under **Environment** for the web service. Then choose **Live 
 
 Live mode still follows the same strict Smart System A rules. If the provider returns missing volume, condition 6 fails unless volume override is explicitly enabled.
 
-## MT5 Direct OHLCV Push
+## MT5 Direct Mode
 
-The `mt5/GoldSmartAgent_PushOHLC.mq5` script reads OHLCV candles from MetaTrader 5 and posts them to the web app API, so you do not need to manually upload the CSV.
+Gold Smart Agent supports two MT5 workflows.
 
-For website-requested MT5 pushing, use the Expert Advisor:
+### Option A: Local Python MT5 Bridge
+
+`mt5_bridge.py` is a read-only Flask API that connects to your local MetaTrader 5 desktop terminal with the `MetaTrader5` Python package. It is designed for RoboForex demo accounts and XAUUSD only.
+
+Install the bridge dependencies on the Windows PC running MT5:
+
+```bash
+pip install -r requirements-mt5-bridge.txt
+```
+
+Set a private API key:
+
+```powershell
+$env:MT5_BRIDGE_API_KEY="change-this-secret"
+```
+
+Optional MT5 login environment variables:
+
+```powershell
+$env:MT5_LOGIN="your_demo_login"
+$env:MT5_PASSWORD="your_demo_password"
+$env:MT5_SERVER="RoboForex-Demo"
+$env:MT5_TERMINAL_PATH="C:\Program Files\MetaTrader 5\terminal64.exe"
+```
+
+Start the local bridge:
+
+```bash
+python mt5_bridge.py
+```
+
+Bridge endpoints:
+
+```text
+GET /api/mt5/status
+GET /api/mt5/account
+GET /api/mt5/xauusd/candles?timeframe=H1&limit=100
+GET /api/mt5/xauusd/candles?timeframe=H4&limit=100
+```
+
+All bridge API calls require:
+
+```text
+X-API-Key: your_key
+```
+
+The candle endpoint returns:
+
+- JSON candle rows
+- `ohlcv_csv` in the same format used by the Gold Smart Agent analyzer:
+
+```text
+timeframe,timestamp,open,high,low,close,volume
+```
+
+To let the hosted Render app call the bridge, the bridge must be reachable from the internet through a secure tunnel or hosted private network. Then set these variables on Render:
+
+```text
+MT5_BRIDGE_URL=https://your-public-bridge-url
+MT5_BRIDGE_API_KEY=change-this-secret
+```
+
+When these variables are present, selecting `MT5 Direct Mode` in the web app reads fresh XAUUSD candles from the bridge and runs analysis immediately:
+
+- Smart System A: H4 and H1
+- UPAS: MN1, W1, D1, H4, and H1
+
+The bridge is read-only. It does not place trades.
+
+### Option B: MT5 Auto-Push EA
+
+The fallback EA reads OHLCV candles from MetaTrader 5 and posts them to the web app API every 5 minutes:
 
 ```text
 mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5
 ```
 
-It polls the website for pending MT5 Direct Mode requests and pushes only the system selected on the website:
+Default interval:
+
+```text
+InpPushIntervalSeconds = 300
+```
+
+The EA pushes both systems:
 
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
 
-Default poll interval:
-
-```text
-InpPushIntervalSeconds = 10
-```
-
-Workflow:
-
-1. Keep the EA attached to your XAUUSD chart.
-2. On the website, choose `Smart System A` or `UPAS Trade Assistant`.
-3. Choose `MT5 Direct Mode`.
-4. Click `Run Analysis`.
-5. The EA picks up the request, reads MT5 OHLCV, and pushes the selected system only.
-
-MT5 setup:
-
-1. Copy `mt5/GoldSmartAgent_PushOHLC.mq5` into your MT5 `MQL5/Scripts` folder.
-2. Compile it in MetaEditor.
-3. In MT5, open **Tools > Options > Expert Advisors**.
-4. Enable **Allow WebRequest for listed URL**.
-5. Add:
-
-```text
-https://smart-system-a-agent.onrender.com
-```
-
-Script inputs:
-
-```text
-InpAnalysisSystem = ssa   # H4 and H1
-InpAnalysisSystem = upas  # MN1, W1, D1, H4, H1
-InpSymbol = blank         # uses current chart symbol
-```
-
-The server endpoint is:
+Server endpoint:
 
 ```text
 POST /api/analyze

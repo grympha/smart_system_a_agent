@@ -4,6 +4,7 @@ from io import BytesIO
 
 from PIL import Image
 
+import web_app as web_module
 from web_app import app, build_live_status
 from tests.conftest import _bullish_h1, _bullish_h4
 from tests.test_upas_agent import h1_confirmation, h4_last_kiss, trend_data
@@ -145,7 +146,9 @@ def test_api_analyze_accepts_mt5_ohlc_csv() -> None:
     assert "output" in payload
 
 
-def test_mt5_direct_mode_shows_waiting_panel() -> None:
+def test_mt5_direct_mode_shows_waiting_panel(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
     client = app.test_client()
     response = client.post(
         "/",
@@ -158,7 +161,9 @@ def test_mt5_direct_mode_shows_waiting_panel() -> None:
     assert b"Keep the MT5 on-demand EA running" not in response.data
 
 
-def test_mt5_direct_mode_creates_on_demand_request() -> None:
+def test_mt5_direct_mode_creates_on_demand_request(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
     client = app.test_client()
     response = client.post("/", data={"data_source": "mt5", "analysis_system": "upas"})
     request_response = client.get("/api/mt5/next-request")
@@ -197,7 +202,9 @@ def test_history_rows_are_clickable_after_api_push() -> None:
     assert b"Stored raw analysis detail" in detail.data
 
 
-def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
+def test_mt5_direct_mode_shows_latest_full_dashboard_after_push(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
     text = "timeframe,timestamp,open,high,low,close,volume\n"
     for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
         for c in data.candles:
@@ -219,7 +226,9 @@ def test_mt5_direct_mode_shows_latest_full_dashboard_after_push() -> None:
     assert b"Keep the MT5 on-demand EA running" not in response.data
 
 
-def test_mt5_direct_mode_filters_to_selected_upas_system() -> None:
+def test_mt5_direct_mode_filters_to_selected_upas_system(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
     text = "timeframe,timestamp,open,high,low,close,volume\n"
     for timeframe, data in [
         ("MN1", trend_data("MN1")),
@@ -241,7 +250,23 @@ def test_mt5_direct_mode_filters_to_selected_upas_system() -> None:
     assert b"Latest MT5 Result - Smart System A" not in response.data
 
 
-def test_upas_history_detail_shows_dashboard_result() -> None:
+def test_mt5_direct_mode_uses_bridge_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("MT5_BRIDGE_URL", "http://bridge.local")
+    monkeypatch.setenv("MT5_BRIDGE_API_KEY", "secret")
+    monkeypatch.setattr(web_module, "fetch_mt5_bridge_data", lambda timeframes: {"H4": _bullish_h4(), "H1": _bullish_h1()})
+
+    client = app.test_client()
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "ssa"})
+
+    assert response.status_code == 200
+    assert b"Waiting for MT5 data" not in response.data
+    assert b"H4 Trend And Wave" in response.data
+    assert b"Six-Condition SSA Checklist" in response.data
+
+
+def test_upas_history_detail_shows_dashboard_result(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
     text = "timeframe,timestamp,open,high,low,close,volume\n"
     for timeframe, data in [
         ("MN1", trend_data("MN1")),

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import urllib.error
+import urllib.request
 from io import BytesIO
 from io import StringIO
 from io import TextIOWrapper
@@ -1031,12 +1034,45 @@ def index():
             )
 
             if form["data_source"] == "mt5":
-                mt5_waiting = True
                 selected_system = "UPAS Trade Assistant" if form["analysis_system"] == "upas" else "Smart System A"
                 requested_mt5_system = selected_system
-                create_mt5_request(form["analysis_system"])
-                latest = latest_history("mt5", selected_system)
-                latest_mt5_results = [latest] if latest else []
+                if mt5_bridge_configured():
+                    multi = fetch_mt5_bridge_data(["MN1", "W1", "D1", "H4", "H1"] if form["analysis_system"] == "upas" else ["H4", "H1"])
+                    if form["analysis_system"] == "upas":
+                        upas_input = UPASInput(
+                            mn1=multi["MN1"],
+                            w1=multi["W1"],
+                            d1=multi["D1"],
+                            h4=multi["H4"],
+                            h1=multi["H1"],
+                            account_balance=float(form["balance"]),
+                        )
+                        upas_analysis = UPASAgent().analyze(upas_input)
+                        result = upas_analysis.payload
+                        output = upas_analysis.summary
+                        summary_details = build_upas_summary(upas_analysis)
+                        why_no_trade = build_upas_why_no_trade(upas_analysis)
+                        save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]))
+                    else:
+                        agent = SmartSystemAAgent()
+                        snapshot = agent.analyze_with_snapshot(
+                            multi["H4"],
+                            multi["H1"],
+                            AccountSettings(balance=float(form["balance"])),
+                            settings,
+                        )
+                        result = snapshot.result
+                        output = agent.format_result(result)
+                        is_trade = isinstance(result, TradeSetup)
+                        checklist_items = build_checklist_items(snapshot)
+                        summary_details = build_ssa_summary(snapshot)
+                        why_no_trade = build_ssa_why_no_trade(snapshot)
+                        save_ssa_history(snapshot, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]))
+                else:
+                    mt5_waiting = True
+                    create_mt5_request(form["analysis_system"])
+                    latest = latest_history("mt5", selected_system)
+                    latest_mt5_results = [latest] if latest else []
             elif form["analysis_system"] == "upas":
                 if form["data_source"] == "live":
                     mn1_data, w1_data, d1_data, h4_data, h1_data = LiveXAUUSDFeed().fetch_upas(form["symbol"])
@@ -1456,6 +1492,47 @@ def build_mt5_data_status(datasets: list[object]) -> dict[str, object]:
         "total_candles": f"{len(candles)} ({timeframe_counts})",
         "volume_data": "Present" if volume_present else "Missing or partial",
     }
+
+
+def mt5_bridge_configured() -> bool:
+    return bool(os.getenv("MT5_BRIDGE_URL") and os.getenv("MT5_BRIDGE_API_KEY"))
+
+
+def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 200) -> dict[str, object]:
+    base_url = (os.getenv("MT5_BRIDGE_URL") or "").rstrip("/")
+    api_key = os.getenv("MT5_BRIDGE_API_KEY") or ""
+    if not base_url or not api_key:
+        raise ValueError("MT5 Bridge is not configured. Set MT5_BRIDGE_URL and MT5_BRIDGE_API_KEY.")
+
+    csv_parts = ["timeframe,timestamp,open,high,low,close,volume"]
+    for timeframe in timeframes:
+        url = f"{base_url}/api/mt5/xauusd/candles?timeframe={timeframe}&limit={limit}"
+        payload = fetch_mt5_bridge_json(url, api_key)
+        if not payload.get("ok"):
+            raise ValueError(str(payload.get("error") or f"MT5 Bridge failed for {timeframe}."))
+        ohlcv_csv = str(payload.get("ohlcv_csv") or "")
+        lines = [line for line in ohlcv_csv.splitlines() if line.strip()]
+        if len(lines) < 2:
+            raise ValueError(f"MT5 Bridge returned no candle rows for {timeframe}.")
+        csv_parts.extend(lines[1:])
+    combined_csv = "\n".join(csv_parts) + "\n"
+    return DataLoader().load_multi_timeframe_csv_stream(StringIO(combined_csv), "XAUUSD")
+
+
+def fetch_mt5_bridge_json(url: str, api_key: str) -> dict[str, object]:
+    req = urllib.request.Request(url, headers={"X-API-Key": api_key, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            message = payload.get("error") or payload.get("message") or str(exc)
+        except Exception:
+            message = str(exc)
+        raise ValueError(f"MT5 Bridge error: {message}") from exc
+    except urllib.error.URLError as exc:
+        raise ValueError(f"Cannot reach MT5 Bridge. Check that the local bridge is running and publicly reachable. Details: {exc.reason}") from exc
 
 
 def extract_page_styles() -> str:
