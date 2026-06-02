@@ -9,6 +9,7 @@ import web_app as web_module
 from web_app import app, build_live_status
 from tests.conftest import _bullish_h1, _bullish_h4
 from tests.test_upas_agent import h1_confirmation, h4_last_kiss, trend_data
+from wave_structure import WaveAnalysisResult
 
 
 def test_home_page_loads() -> None:
@@ -231,6 +232,28 @@ def test_api_analyze_stores_market_snapshot_and_chart_image() -> None:
     image_response = client.get(payload["chart_snapshot"]["image_url"])
     assert image_response.status_code == 200
     assert image_response.mimetype == "image/png"
+
+
+def test_wave_trade_plan_rejects_sell_entry_below_current_price() -> None:
+    wave = WaveAnalysisResult(
+        symbol="XAUUSD",
+        timeframe="H4",
+        market_phase="Impulse",
+        primary_scenario="Wave 3 Continuation",
+        alternative_scenario="Possible ABC correction",
+        direction="Bearish",
+        wave_score=8,
+        confidence=80,
+        risk_level="Low",
+        trading_bias="SELL",
+        suggested_action="Prepare for SELL only after pullback/retest remains protected.",
+        entry_zone=4447.34,
+        invalidation_level=4458.45,
+        reason="test",
+        failed_rules=[],
+    )
+
+    assert web_module.build_wave_trade_plan(wave, current_price=4532.9) is None
 
 
 def test_api_analyze_accepts_mt5_wave_ohlc_csv() -> None:

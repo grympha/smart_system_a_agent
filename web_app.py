@@ -1165,6 +1165,12 @@ def parse_optional_float(value: object) -> float | None:
         return None
 
 
+def snapshot_current_price(market_snapshot: dict[str, object] | None) -> float | None:
+    if not market_snapshot:
+        return None
+    return parse_optional_float(market_snapshot.get("current_price"))
+
+
 @app.post("/api/analyze")
 def api_analyze() -> Response:
     payload = request.get_json(silent=True) or {}
@@ -1178,10 +1184,11 @@ def api_analyze() -> Response:
         market_snapshot, chart_snapshot = intake_market_context(payload, analysis_system, symbol)
         multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
         if analysis_system == "wave":
-            wave_results = analyze_wave_results_from_multi(multi, current_price=parse_optional_float(payload.get("current_price")))
+            current_market_price = parse_optional_float(payload.get("current_price"))
+            wave_results = analyze_wave_results_from_multi(multi, current_price=current_market_price)
             wave = primary_wave_result(wave_results)
-            trade_plan = build_wave_trade_plan(wave, multi[wave.timeframe].candles[-1].close)
-            trade_plans = build_wave_trade_plans(wave_results, multi)
+            trade_plan = build_wave_trade_plan(wave, current_market_price or multi[wave.timeframe].candles[-1].close)
+            trade_plans = build_wave_trade_plans(wave_results, multi, current_price=current_market_price)
             save_wave_history(wave, source="mt5", mt5_data_status=build_mt5_data_status([data for tf, data in multi.items() if tf in {"H4", "H1"}]), trade_plan=trade_plan, related_results=wave_results, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
             return jsonify(
                 {
@@ -1348,11 +1355,12 @@ def index():
                         why_no_trade = build_upas_why_no_trade(upas_analysis)
                         save_upas_history(upas_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["MN1"], multi["W1"], multi["D1"], multi["H4"], multi["H1"]]), market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
                     elif form["analysis_system"] == "wave":
-                        wave_results = analyze_wave_results_from_multi(multi)
+                        current_market_price = snapshot_current_price(market_snapshot)
+                        wave_results = analyze_wave_results_from_multi(multi, current_price=current_market_price)
                         wave_analysis = primary_wave_result(wave_results)
                         result = wave_analysis
                         output = format_wave_result(wave_analysis)
-                        trade_plan = build_wave_trade_plan(wave_analysis, multi[wave_analysis.timeframe].candles[-1].close)
+                        trade_plan = build_wave_trade_plan(wave_analysis, current_market_price or multi[wave_analysis.timeframe].candles[-1].close)
                         summary_details = build_wave_summary(wave_analysis, trade_plan)
                         save_wave_history(wave_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"]]), trade_plan=trade_plan, related_results=wave_results, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
                     else:
@@ -1842,10 +1850,22 @@ def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None 
     stop = wave.invalidation_level
     if wave.status != "WAVE_CONFIRMED" or direction not in {"BUY", "SELL"} or stop is None or entry is None:
         return None
-    risk = abs(entry - stop)
+    if direction == "BUY":
+        if stop >= entry:
+            return None
+        if current_price is not None and entry > current_price:
+            return None
+        risk = entry - stop
+        target = entry + 2 * risk
+    else:
+        if stop <= entry:
+            return None
+        if current_price is not None and entry < current_price:
+            return None
+        risk = stop - entry
+        target = entry - 2 * risk
     if risk <= 0:
         return None
-    target = entry + 2 * risk if direction == "BUY" else entry - 2 * risk
     return {
         "action": f"ENTER {direction}",
         "entry_point": round(entry, 3),
@@ -1857,11 +1877,12 @@ def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None 
 def build_wave_trade_plans(
     wave_results: dict[str, WaveAnalysisResult],
     multi: dict[str, object],
+    current_price: float | None = None,
 ) -> dict[str, dict[str, object]]:
     plans = {}
     for timeframe, wave in wave_results.items():
         if timeframe in multi:
-            plan = build_wave_trade_plan(wave, multi[timeframe].candles[-1].close)
+            plan = build_wave_trade_plan(wave, current_price or multi[timeframe].candles[-1].close)
             if plan:
                 plans[timeframe] = plan
     return plans

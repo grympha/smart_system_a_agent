@@ -103,3 +103,34 @@ def test_bearish_wave_rejects_wide_old_swing_as_retest_zone() -> None:
     assert result.status != "WAVE_CONFIRMED"
     assert result.entry_zone is None
     assert "Retest / pullback confirmed" in result.failed_rules
+
+
+def test_bearish_wave_rejects_sell_retest_below_current_price() -> None:
+    candles = [
+        c(0, 4540, 4560, 4520, 4530),
+        c(1, 4530, 4540, 4490, 4500),
+        c(2, 4500, 4510, 4440, 4450),
+        c(3, 4450, 4460, 4420, 4430),
+        c(4, 4430, 4458, 4400, 4410),
+        c(5, 4410, 4447, 4390, 4400),
+        c(6, 4400, 4420, 4380, 4390),
+        c(7, 4390, 4410, 4370, 4380),
+        c(8, 4380, 4400, 4360, 4370),
+        c(9, 4370, 4390, 4350, 4360),
+    ]
+    result = WaveStructureAnalyst().analyze(
+        WaveAnalysisInput(
+            symbol="XAUUSD",
+            timeframe="H4",
+            primary_data=OHLCVData(candles, "H4"),
+            current_price=4532.9,
+            breakout_level=4447.34,
+            retest_level=4447.34,
+            trend_direction="bearish",
+        )
+    )
+
+    assert result.trading_bias == "WAIT"
+    assert result.status != "WAVE_CONFIRMED"
+    assert result.entry_zone is None
+    assert "retest" in " ".join(result.failed_rules).lower()

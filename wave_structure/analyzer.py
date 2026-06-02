@@ -66,8 +66,9 @@ class WaveStructureAnalyst:
         invalidation = retest["invalidation"] if retest else min(c.low for c in candles[-5:])
         wave2_respected = invalidation > wave1_low
         breakout_confirmed = current_price > breakout_level and candles[-1].close > wave1_high
-        retest_confirmed = retest is not None
-        rr_valid = self._risk_reward_valid(entry_zone, invalidation)
+        entry_side_valid = entry_zone is not None and current_price >= entry_zone and invalidation < entry_zone
+        retest_confirmed = retest is not None and entry_side_valid
+        rr_valid = self._risk_reward_valid(entry_zone, invalidation) and entry_side_valid
         score, failed = self._score(True, wave2_respected, breakout_confirmed, retest_confirmed, request.trend_direction == "bullish", rr_valid)
         bias = "BUY" if score >= 8 else "WAIT"
         return self._result(
@@ -105,8 +106,9 @@ class WaveStructureAnalyst:
         invalidation = retest["invalidation"] if retest else max(c.high for c in candles[-5:])
         wave2_respected = invalidation < wave1_high
         breakout_confirmed = current_price < breakout_level and candles[-1].close < wave1_low
-        retest_confirmed = retest is not None
-        rr_valid = self._risk_reward_valid(entry_zone, invalidation)
+        entry_side_valid = entry_zone is not None and current_price <= entry_zone and invalidation > entry_zone
+        retest_confirmed = retest is not None and entry_side_valid
+        rr_valid = self._risk_reward_valid(entry_zone, invalidation) and entry_side_valid
         score, failed = self._score(True, wave2_respected, breakout_confirmed, retest_confirmed, request.trend_direction == "bearish", rr_valid)
         bias = "SELL" if score >= 8 else "WAIT"
         return self._result(
