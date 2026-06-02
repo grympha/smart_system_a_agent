@@ -29,6 +29,32 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 
+@app.template_filter("clean_status")
+def clean_status(value: object) -> str:
+    if value is None:
+        return "None"
+    text = str(value).strip()
+    if not text:
+        return "None"
+    known_values = {
+        "NO_TRADE",
+        "NO_VALID_SETUP",
+        "VALID_TRADE",
+        "WAVE_CONFIRMED",
+        "WAIT",
+        "BUY",
+        "SELL",
+        "NONE",
+        "NEUTRAL",
+    }
+    upper_text = text.upper()
+    if upper_text in known_values:
+        return upper_text.replace("_", " ").title()
+    if "_" in text and text.replace("_", "").isupper():
+        return text.replace("_", " ").title()
+    return text
+
+
 PAGE = """
 <!doctype html>
 <html lang="en">
@@ -370,6 +396,67 @@ PAGE = """
       border-radius: 8px;
       background: #05070c;
     }
+    .chart-preview-trigger {
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      cursor: zoom-in;
+      display: block;
+    }
+    .chart-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(3, 7, 14, 0.86);
+    }
+    .chart-modal.is-open {
+      display: flex;
+    }
+    .chart-modal__dialog {
+      width: min(1180px, 96vw);
+      max-height: 92vh;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.55);
+    }
+    .chart-modal__bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .chart-modal__title {
+      font-size: 14px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    .chart-modal__close {
+      width: auto;
+      min-width: 42px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      background: #0f1726;
+      color: var(--ink);
+    }
+    .chart-modal__image {
+      width: 100%;
+      max-height: 78vh;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #05070c;
+    }
     .history-table {
       width: 100%;
       border-collapse: collapse;
@@ -582,7 +669,7 @@ PAGE = """
                 <h2>Latest MT5 Result - {{ item.system_used }}</h2>
                 <dl class="summary-list">
                   <div class="summary-row"><dt>Date / Time</dt><dd>{{ item.created_at }}</dd></div>
-                  <div class="summary-row"><dt>Status</dt><dd>{{ item.status }}</dd></div>
+                  <div class="summary-row"><dt>Status</dt><dd>{{ item.status|clean_status }}</dd></div>
                   <div class="summary-row"><dt>Setup</dt><dd>{{ item.setup_name }}</dd></div>
                   <div class="summary-row"><dt>Score</dt><dd>{{ item.score }}</dd></div>
                   <div class="summary-row"><dt>Summary</dt><dd>{{ item.summary }}</dd></div>
@@ -613,9 +700,9 @@ PAGE = """
               {% if item.detail and item.detail.chart_snapshot %}
                 <div class="panel">
                   <h2 class="panel-title">Latest Chart Preview</h2>
-                  <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                  <button type="button" class="chart-preview-trigger" data-chart-url="{{ item.detail.chart_snapshot.image_url }}" data-chart-title="{{ item.detail.chart_snapshot.symbol }} {{ item.detail.chart_snapshot.metadata.timeframe or 'H1' }} - {{ item.detail.chart_snapshot.market_timestamp }}">
                     <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
-                  </a>
+                  </button>
                   <div class="grid">
                     <div class="metric"><span>Symbol</span>{{ item.detail.chart_snapshot.symbol }}</div>
                     <div class="metric"><span>Timeframe</span>{{ item.detail.chart_snapshot.metadata.timeframe or "H1" }}</div>
@@ -651,7 +738,7 @@ PAGE = """
                       <h2 class="panel-title">MT5 Wave Timeframe Results</h2>
                       <div class="grid">
                         {% for tf, wave in item.detail.timeframe_results.items() %}
-                          <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                          <div class="metric"><span>{{ tf }}</span>{{ wave.status|clean_status }} - {{ wave.trading_bias|clean_status }} - {{ wave.wave_score }}/10</div>
                         {% endfor %}
                       </div>
                     </div>
@@ -662,9 +749,9 @@ PAGE = """
                       <div class="metric"><span>Timeframe</span>{{ item.detail.timeframe }}</div>
                       <div class="metric"><span>Market Phase</span>{{ item.detail.market_phase }}</div>
                       <div class="metric"><span>Primary Scenario</span>{{ item.detail.primary_scenario }}</div>
-                      <div class="metric"><span>Direction</span>{{ item.detail.direction }}</div>
+                      <div class="metric"><span>Direction</span>{{ item.detail.direction|clean_status }}</div>
                       <div class="metric"><span>Wave Score</span>{{ item.detail.wave_score }}/10</div>
-                      <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias }}</div>
+                      <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias|clean_status }}</div>
                     </div>
                   </div>
                 </div>
@@ -718,9 +805,9 @@ PAGE = """
                       <h2 class="panel-title">MT5 UPAS Setup</h2>
                       <div class="grid">
                         <div class="metric"><span>Name</span>{{ item.detail.setup.name }}</div>
-                        <div class="metric"><span>Direction</span>{{ item.detail.setup.direction }}</div>
+                        <div class="metric"><span>Direction</span>{{ item.detail.setup.direction|clean_status }}</div>
                         <div class="metric"><span>Score</span>{{ item.detail.setup.confluence_score }}/5</div>
-                        <div class="metric"><span>Status</span>{{ item.detail.status }}</div>
+                        <div class="metric"><span>Status</span>{{ item.detail.status|clean_status }}</div>
                       </div>
                     </div>
                   </div>
@@ -780,9 +867,9 @@ PAGE = """
           {% if chart_snapshot %}
             <div class="panel">
               <h2 class="panel-title">Latest Chart Preview</h2>
-              <a href="{{ chart_snapshot.image_url }}" target="_blank">
+              <button type="button" class="chart-preview-trigger" data-chart-url="{{ chart_snapshot.image_url }}" data-chart-title="{{ chart_snapshot.symbol }} {{ chart_snapshot.metadata.timeframe or 'H1' }} - {{ chart_snapshot.market_timestamp }}">
                 <img class="image-preview" src="{{ chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
-              </a>
+              </button>
               <div class="grid">
                 <div class="metric"><span>Symbol</span>{{ chart_snapshot.symbol }}</div>
                 <div class="metric"><span>Timeframe</span>{{ chart_snapshot.metadata.timeframe or "H1" }}</div>
@@ -793,11 +880,13 @@ PAGE = """
           {% if image_preview %}
             <div class="panel">
               <h2 class="panel-title">Chart Screenshot Preview</h2>
-              <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+              <button type="button" class="chart-preview-trigger" data-chart-url="{{ image_preview.data_url }}" data-chart-title="Uploaded chart screenshot">
+                <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+              </button>
             </div>
           {% endif %}
           {% if upas_analysis %}
-            <div class="status {{ '' if upas_analysis.payload.status == 'VALID_TRADE' else 'no-setup' }}">{{ upas_analysis.payload.status }}</div>
+            <div class="status {{ '' if upas_analysis.payload.status == 'VALID_TRADE' else 'no-setup' }}">{{ upas_analysis.payload.status|clean_status }}</div>
             {% if trade_plan %}
               <div class="panel">
                 <h2 class="panel-title">Trade Plan</h2>
@@ -823,7 +912,7 @@ PAGE = """
                   <h2 class="panel-title">UPAS Setup</h2>
                   <div class="grid">
                     <div class="metric"><span>Name</span>{{ upas_analysis.payload.setup.name }}</div>
-                    <div class="metric"><span>Direction</span>{{ upas_analysis.payload.setup.direction }}</div>
+                    <div class="metric"><span>Direction</span>{{ upas_analysis.payload.setup.direction|clean_status }}</div>
                     <div class="metric"><span>Score</span>{{ upas_analysis.payload.setup.confluence_score }}/5</div>
                     <div class="metric"><span>Module</span>{{ upas_analysis.payload.module }}</div>
                   </div>
@@ -852,7 +941,7 @@ PAGE = """
               {% endif %}
             </div>
           {% elif wave_analysis %}
-            <div class="status {{ '' if wave_analysis.status == 'WAVE_CONFIRMED' else 'no-setup' }}">{{ wave_analysis.status }}</div>
+            <div class="status {{ '' if wave_analysis.status == 'WAVE_CONFIRMED' else 'no-setup' }}">{{ wave_analysis.status|clean_status }}</div>
             <div class="dashboard">
               {% if wave_results %}
                 <div class="panel">
@@ -862,12 +951,12 @@ PAGE = """
                       <div class="panel">
                         <h2 class="panel-title">{{ tf }} Result</h2>
                         <div class="grid">
-                          <div class="metric"><span>Status</span>{{ wave.status }}</div>
+                          <div class="metric"><span>Status</span>{{ wave.status|clean_status }}</div>
                           <div class="metric"><span>Market Phase</span>{{ wave.market_phase }}</div>
                           <div class="metric"><span>Primary Scenario</span>{{ wave.primary_scenario }}</div>
-                          <div class="metric"><span>Direction</span>{{ wave.direction }}</div>
+                          <div class="metric"><span>Direction</span>{{ wave.direction|clean_status }}</div>
                           <div class="metric"><span>Wave Score</span>{{ wave.wave_score }}/10</div>
-                          <div class="metric"><span>Trading Bias</span>{{ wave.trading_bias }}</div>
+                          <div class="metric"><span>Trading Bias</span>{{ wave.trading_bias|clean_status }}</div>
                           <div class="metric"><span>Pullback Zone</span>{{ wave.entry_zone if wave.entry_zone is not none else "None" }}</div>
                           <div class="metric"><span>Invalidation Level</span>{{ wave.invalidation_level if wave.invalidation_level is not none else "None" }}</div>
                           <div class="metric"><span>Suggested Action</span>{{ wave.suggested_action }}</div>
@@ -894,7 +983,7 @@ PAGE = """
                   {% for item in summary_details %}
                     <div class="summary-row">
                       <dt>{{ item.label }}</dt>
-                      <dd>{{ item.value }}</dd>
+                      <dd>{{ item.value|clean_status }}</dd>
                     </div>
                   {% endfor %}
                 </dl>
@@ -991,7 +1080,7 @@ PAGE = """
                 {% for item in summary_details %}
                   <div class="summary-row">
                     <dt>{{ item.label }}</dt>
-                    <dd>{{ item.value }}</dd>
+                    <dd>{{ item.value|clean_status }}</dd>
                   </div>
                 {% endfor %}
               </dl>
@@ -1022,7 +1111,9 @@ PAGE = """
           {% if image_preview %}
             <div class="panel">
               <h2 class="panel-title">Chart Screenshot Preview</h2>
-              <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+              <button type="button" class="chart-preview-trigger" data-chart-url="{{ image_preview.data_url }}" data-chart-title="Uploaded chart screenshot">
+                <img class="image-preview" src="{{ image_preview.data_url }}" alt="Uploaded chart screenshot preview">
+              </button>
             </div>
           {% endif %}
           <div class="grid">
@@ -1058,7 +1149,7 @@ PAGE = """
                 <tr>
                   <td data-label="Date / Time">{{ row.created_at }}</td>
                   <td data-label="System"><a class="history-link" href="/history/{{ row.id }}">{{ row.system_used }}</a></td>
-                  <td data-label="Status">{{ row.status }}</td>
+                  <td data-label="Status">{{ row.status|clean_status }}</td>
                   <td data-label="Setup">{{ row.setup_name }}</td>
                   <td data-label="Score">{{ row.score }}</td>
                   <td data-label="Summary">{{ row.summary }}</td>
@@ -1071,11 +1162,46 @@ PAGE = """
     </section>
     <footer>© 2026 Grympha.</footer>
   </main>
+  <div class="chart-modal" id="chart-modal" aria-hidden="true">
+    <div class="chart-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+      <div class="chart-modal__bar">
+        <div class="chart-modal__title" id="chart-modal-title">Chart Preview</div>
+        <button type="button" class="chart-modal__close" data-chart-close>Close</button>
+      </div>
+      <img class="chart-modal__image" id="chart-modal-image" alt="Expanded chart preview">
+    </div>
+  </div>
   <script>
     const dataSource = document.getElementById("data_source");
     const syncSource = () => document.body.dataset.source = dataSource.value;
     dataSource.addEventListener("change", syncSource);
     syncSource();
+    const chartModal = document.getElementById("chart-modal");
+    const chartModalImage = document.getElementById("chart-modal-image");
+    const chartModalTitle = document.getElementById("chart-modal-title");
+    const closeChartModal = () => {
+      chartModal.classList.remove("is-open");
+      chartModal.setAttribute("aria-hidden", "true");
+      chartModalImage.removeAttribute("src");
+    };
+    document.addEventListener("click", (event) => {
+      const trigger = event.target.closest(".chart-preview-trigger");
+      if (trigger) {
+        chartModalImage.src = trigger.dataset.chartUrl;
+        chartModalTitle.textContent = trigger.dataset.chartTitle || "Chart Preview";
+        chartModal.classList.add("is-open");
+        chartModal.setAttribute("aria-hidden", "false");
+        return;
+      }
+      if (event.target.matches("[data-chart-close]") || event.target === chartModal) {
+        closeChartModal();
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && chartModal.classList.contains("is-open")) {
+        closeChartModal();
+      }
+    });
   </script>
 </body>
 </html>
@@ -1535,7 +1661,7 @@ def history_detail(item_id: int) -> Response:
           <main style="display:block; min-height:calc(100vh - 67px);">
             <section class="workspace">
               <div class="result">
-                <div class="status {{ '' if item.status in ['VALID_TRADE', 'WAVE_CONFIRMED'] else 'no-setup' }}">{{ item.status }}</div>
+                <div class="status {{ '' if item.status in ['VALID_TRADE', 'WAVE_CONFIRMED'] else 'no-setup' }}">{{ item.status|clean_status }}</div>
                 <div class="decision-summary">
                   <h2>Analysis History Detail</h2>
                   <dl class="summary-list">
@@ -1562,9 +1688,9 @@ def history_detail(item_id: int) -> Response:
                     {% if item.detail.chart_snapshot %}
                       <div class="panel">
                         <h2 class="panel-title">Latest Chart Preview</h2>
-                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                        <button type="button" class="chart-preview-trigger" data-chart-url="{{ item.detail.chart_snapshot.image_url }}" data-chart-title="{{ item.detail.chart_snapshot.symbol }} {{ item.detail.chart_snapshot.metadata.timeframe or 'H1' }} - {{ item.detail.chart_snapshot.market_timestamp }}">
                           <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
-                        </a>
+                        </button>
                       </div>
                     {% endif %}
                     {% if item.detail.trade_plan and item.detail.trade_plan.action %}
@@ -1625,9 +1751,9 @@ def history_detail(item_id: int) -> Response:
                     {% if item.detail.chart_snapshot %}
                       <div class="panel">
                         <h2 class="panel-title">Latest Chart Preview</h2>
-                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                        <button type="button" class="chart-preview-trigger" data-chart-url="{{ item.detail.chart_snapshot.image_url }}" data-chart-title="{{ item.detail.chart_snapshot.symbol }} {{ item.detail.chart_snapshot.metadata.timeframe or 'H1' }} - {{ item.detail.chart_snapshot.market_timestamp }}">
                           <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
-                        </a>
+                        </button>
                       </div>
                     {% endif %}
                     {% if item.detail.trade_plan_display %}
@@ -1665,9 +1791,9 @@ def history_detail(item_id: int) -> Response:
                         <h2 class="panel-title">UPAS Setup</h2>
                         <div class="grid">
                           <div class="metric"><span>Name</span>{{ item.detail.setup.name }}</div>
-                          <div class="metric"><span>Direction</span>{{ item.detail.setup.direction }}</div>
+                          <div class="metric"><span>Direction</span>{{ item.detail.setup.direction|clean_status }}</div>
                           <div class="metric"><span>Score</span>{{ item.detail.setup.confluence_score }}/5</div>
-                          <div class="metric"><span>Status</span>{{ item.detail.status }}</div>
+                          <div class="metric"><span>Status</span>{{ item.detail.status|clean_status }}</div>
                         </div>
                       </div>
                     </div>
@@ -1708,9 +1834,9 @@ def history_detail(item_id: int) -> Response:
                     {% if item.detail.chart_snapshot %}
                       <div class="panel">
                         <h2 class="panel-title">Latest Chart Preview</h2>
-                        <a href="{{ item.detail.chart_snapshot.image_url }}" target="_blank">
+                        <button type="button" class="chart-preview-trigger" data-chart-url="{{ item.detail.chart_snapshot.image_url }}" data-chart-title="{{ item.detail.chart_snapshot.symbol }} {{ item.detail.chart_snapshot.metadata.timeframe or 'H1' }} - {{ item.detail.chart_snapshot.market_timestamp }}">
                           <img class="image-preview" src="{{ item.detail.chart_snapshot.image_url }}" alt="Latest chart screenshot preview">
-                        </a>
+                        </button>
                       </div>
                     {% endif %}
                     {% if item.detail.timeframe_results %}
@@ -1718,7 +1844,7 @@ def history_detail(item_id: int) -> Response:
                         <h2 class="panel-title">Wave Timeframe Results</h2>
                         <div class="grid">
                           {% for tf, wave in item.detail.timeframe_results.items() %}
-                            <div class="metric"><span>{{ tf }}</span>{{ wave.status }} - {{ wave.trading_bias }} - {{ wave.wave_score }}/10</div>
+                            <div class="metric"><span>{{ tf }}</span>{{ wave.status|clean_status }} - {{ wave.trading_bias|clean_status }} - {{ wave.wave_score }}/10</div>
                           {% endfor %}
                         </div>
                       </div>
@@ -1753,11 +1879,11 @@ def history_detail(item_id: int) -> Response:
                         <div class="metric"><span>Market Phase</span>{{ item.detail.market_phase }}</div>
                         <div class="metric"><span>Primary Scenario</span>{{ item.detail.primary_scenario }}</div>
                         <div class="metric"><span>Alternative Scenario</span>{{ item.detail.alternative_scenario }}</div>
-                        <div class="metric"><span>Direction</span>{{ item.detail.direction }}</div>
+                        <div class="metric"><span>Direction</span>{{ item.detail.direction|clean_status }}</div>
                         <div class="metric"><span>Wave Score</span>{{ item.detail.wave_score }}/10</div>
                         <div class="metric"><span>Confidence</span>{{ item.detail.confidence }}%</div>
                         <div class="metric"><span>Risk Level</span>{{ item.detail.risk_level }}</div>
-                        <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias }}</div>
+                        <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias|clean_status }}</div>
                         <div class="metric"><span>Pullback Zone</span>{{ item.detail.entry_zone if item.detail.entry_zone is not none else "None" }}</div>
                         <div class="metric"><span>Invalidation Level</span>{{ item.detail.invalidation_level if item.detail.invalidation_level is not none else "None" }}</div>
                         <div class="metric"><span>Safety</span>Analysis only</div>
@@ -1767,7 +1893,7 @@ def history_detail(item_id: int) -> Response:
                       <h2>Wave Decision Summary</h2>
                       <dl class="summary-list">
                         {% for row in item.detail.decision_summary %}
-                          <div class="summary-row"><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
+                          <div class="summary-row"><dt>{{ row.label }}</dt><dd>{{ row.value|clean_status }}</dd></div>
                         {% endfor %}
                       </dl>
                     </div>
@@ -1788,6 +1914,43 @@ def history_detail(item_id: int) -> Response:
               </div>
             </section>
           </main>
+          <div class="chart-modal" id="chart-modal" aria-hidden="true">
+            <div class="chart-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+              <div class="chart-modal__bar">
+                <div class="chart-modal__title" id="chart-modal-title">Chart Preview</div>
+                <button type="button" class="chart-modal__close" data-chart-close>Close</button>
+              </div>
+              <img class="chart-modal__image" id="chart-modal-image" alt="Expanded chart preview">
+            </div>
+          </div>
+          <script>
+            const chartModal = document.getElementById("chart-modal");
+            const chartModalImage = document.getElementById("chart-modal-image");
+            const chartModalTitle = document.getElementById("chart-modal-title");
+            const closeChartModal = () => {
+              chartModal.classList.remove("is-open");
+              chartModal.setAttribute("aria-hidden", "true");
+              chartModalImage.removeAttribute("src");
+            };
+            document.addEventListener("click", (event) => {
+              const trigger = event.target.closest(".chart-preview-trigger");
+              if (trigger) {
+                chartModalImage.src = trigger.dataset.chartUrl;
+                chartModalTitle.textContent = trigger.dataset.chartTitle || "Chart Preview";
+                chartModal.classList.add("is-open");
+                chartModal.setAttribute("aria-hidden", "false");
+                return;
+              }
+              if (event.target.matches("[data-chart-close]") || event.target === chartModal) {
+                closeChartModal();
+              }
+            });
+            document.addEventListener("keydown", (event) => {
+              if (event.key === "Escape" && chartModal.classList.contains("is-open")) {
+                closeChartModal();
+              }
+            });
+          </script>
         </body>
         </html>
         """,

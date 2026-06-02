@@ -6,7 +6,7 @@ from io import BytesIO
 from PIL import Image
 
 import web_app as web_module
-from web_app import app, build_live_status
+from web_app import app, build_live_status, clean_status
 from tests.conftest import _bullish_h1, _bullish_h4
 from tests.test_upas_agent import h1_confirmation, h4_last_kiss, trend_data
 from wave_structure import WaveAnalysisResult
@@ -35,6 +35,13 @@ def test_api_ping() -> None:
 
     assert response.status_code == 200
     assert response.get_json()["status"] == "READY"
+
+
+def test_clean_status_formats_machine_labels() -> None:
+    assert clean_status("NO_TRADE") == "No Trade"
+    assert clean_status("NO_VALID_SETUP") == "No Valid Setup"
+    assert clean_status("WAVE_CONFIRMED") == "Wave Confirmed"
+    assert clean_status("TP1 4500, TP2 4510") == "TP1 4500, TP2 4510"
 
 
 def test_image_upload_returns_image_intake_no_setup() -> None:
@@ -159,6 +166,8 @@ def test_mt5_direct_mode_renders_market_snapshot_and_latest_chart(monkeypatch) -
     assert b"Market Snapshot" in response.data
     assert b"3368.45" in response.data
     assert b"Latest Chart Preview" in response.data
+    assert b"chart-modal" in response.data
+    assert b'target="_blank"' not in response.data
     assert chart["image_url"].encode() in response.data
 
 
