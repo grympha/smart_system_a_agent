@@ -28,6 +28,7 @@ def create_mt5_request(analysis_system: str) -> dict[str, Any]:
     init_requests()
     created_at = datetime.now(MALAYSIA_TZ).strftime("%Y-%m-%d %H:%M:%S MYT")
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE mt5_requests SET status = 'superseded' WHERE status = 'pending'")
         cursor = conn.execute(
             """
             INSERT INTO mt5_requests (created_at, analysis_system, status)

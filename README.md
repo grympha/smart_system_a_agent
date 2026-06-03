@@ -1,29 +1,124 @@
-# Smart System A Agent
+# Gold Smart Agent
 
-Smart System A Agent is a strict Python analysis tool for XAUUSD. It analyzes H4 trend and Elliott Wave context first, then H1 breakout, pullback, candle behavior, and volume confirmation. It does not place trades and does not mix in other trading strategies or indicators.
+Gold Smart Agent is a Python/Flask web analysis platform for XAUUSD. It provides strict rule-based analysis only. It does not place trades, connect to execution, or guarantee outcomes.
 
-## What It Does
+Current analysis systems:
 
-- Reads H4 and H1 OHLCV CSV files.
-- Determines H4 trend, market state, and a rule-based Elliott Wave approximation.
-- Detects H1 BOS, breakout quality, retest zone, candle confirmation, and volume behavior.
-- Applies the six-condition Smart System A checklist.
-- Returns no setup when any SSA rule fails.
-- Calculates XAUUSD SL, TP1, TP2, risk amount, and lot size only after all six conditions pass.
-- Applies FTMO-compatible fixed risk mechanics using `1 pip = 1.00 price movement` for XAUUSD, so `4550` to `4560` is `10` pips, and `1 lot = $100 per pip`.
+- Smart System A
+- UPAS Trade Assistant
+- Wave Structure Analyst
 
-## Install
+Hosted app:
 
-```bash
-cd smart_system_a_agent
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+```text
+https://smart-system-a-agent.onrender.com/
 ```
+
+## Quick Start From Any Computer
+
+```powershell
+git clone https://github.com/grympha/smart_system_a_agent.git
+cd smart_system_a_agent
+git checkout codex/render-deployment
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+python -m pytest
+python web_app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+If `git` is not recognized on Windows, install Git for Windows or run it from:
+
+```text
+C:\Program Files\Git\cmd\git.exe
+```
+
+## Project Documents
+
+- `PROJECT_CONTEXT.md` explains the architecture, deployment, MT5 bridge, environment variables, and current caveats.
+- `CHANGELOG.md` records important feature updates.
+- `TODO.md` lists next improvements and known follow-up work.
+- `DEPLOYMENT.md` contains Render deployment guidance.
+
+Read `PROJECT_CONTEXT.md` first when continuing the project from another PC.
+
+## Analysis Systems
+
+### Smart System A
+
+Smart System A analyzes XAUUSD top-down:
+
+- H4 trend, market state, and Elliott Wave context
+- H1 BOS, breakout, pullback, candle confirmation, and volume
+- Six-condition SSA checklist
+- Strict no-setup output when any condition fails
+- Mechanical XAUUSD risk, SL, TP, and lot-size calculation only after all rules pass
+
+Required OHLC timeframes:
+
+```text
+H4, H1
+```
+
+XAUUSD pip rule:
+
+```text
+1 pip = 1.00 price movement
+4550 to 4560 = 10 pips
+1 lot = $100 per pip
+```
+
+### UPAS Trade Assistant
+
+UPAS is a pure price-action XAUUSD module. It detects only:
+
+- Kangaroo Tail
+- Last Kiss
+- Moolah
+- Engulfing Trap Bar
+
+It returns `VALID_TRADE`, `NO_TRADE`, `REJECTED_BY_RISK`, or `INSUFFICIENT_DATA`. It prefers no trade over weak setups.
+
+Required OHLC timeframes:
+
+```text
+MN1, W1, D1, H4, H1
+```
+
+### Wave Structure Analyst
+
+Wave Structure Analyst is an Elliott Wave confirmation layer for XAUUSD. It classifies:
+
+- Wave 3 continuation
+- ABC correction
+- Wave 5 exhaustion
+- Unknown or unclear structure
+
+It does not replace SSA or UPAS and does not force trades. It returns `WAIT` or `NO_VALID_SETUP` when the wave structure is unclear.
+
+Required OHLC timeframes:
+
+```text
+H4 or H1
+```
+
+Optional context:
+
+```text
+D1, M30, M15
+```
+
+When both H4 and H1 rows are present, the app can calculate both Wave Structure results and let the dashboard show the relevant timeframe result. The sidebar no longer asks for manual wave levels; the module infers price, swings, breakout, retest, and trend from OHLCV data.
 
 ## OHLC CSV Format
 
-The web platform uses one combined OHLC CSV file. It must contain:
+The web app uses one combined OHLC CSV file:
 
 ```csv
 timeframe,timestamp,open,high,low,close,volume
@@ -31,99 +126,86 @@ H4,2026-01-01 00:00,4100,4110,4095,4108,1200
 H1,2026-01-01 01:00,4108,4112,4101,4105,950
 ```
 
-Smart System A requires `H4` and `H1` rows. UPAS requires `MN1`, `W1`, `D1`, `H4`, and `H1` rows. Wave Structure Analyst requires `H4` or `H1` rows and can also use optional `D1`, `M30`, and `M15` rows.
+Volume is important. If volume is missing, the system reports:
 
-If volume is missing, the agent reports `Volume analysis limited - OHLCV volume data missing.` Condition 6 does not automatically pass unless `--volume-override` is explicitly provided.
+```text
+Volume analysis limited - OHLCV volume data missing.
+```
 
-## Run
+Smart System A condition 6 does not automatically pass when volume is missing.
 
-```bash
+## Web Dashboard
+
+The dashboard uses the same dark premium design for all systems.
+
+Analysis results are shown in framed sections for:
+
+- Market context
+- Setup or wave scenario
+- Checklist or scoring model
+- Trade plan or suggested action
+- Decision summary
+- Recent analysis history
+
+Each strategy also shows a trade plan panel with the current action, entry point, take profit, and stop loss. When rules are not complete, the action remains `WAIT` and the plan explains what must form before entry.
+
+Chart screenshot upload currently supports PNG, JPG, and WebP preview/intake. Screenshot upload alone does not replace OHLCV analysis.
+
+## Run CLI Analysis
+
+Smart System A CLI:
+
+```powershell
 python main.py --h4 data/xauusd_h4.csv --h1 data/xauusd_h1.csv --balance 100000 --risk-mode standard
 ```
 
-Optional high-confidence mode:
+High-confidence Wave 3 mode, only when explicitly selected:
 
-```bash
+```powershell
 python main.py --h4 data/xauusd_h4.csv --h1 data/xauusd_h1.csv --balance 100000 --risk-mode high_confidence --risk-percent 1.2
 ```
 
-## Run The Web Platform Locally
+## Run Web App
 
-```bash
+```powershell
 python web_app.py
 ```
 
-Then open:
+Production start command:
 
 ```text
-http://127.0.0.1:8000
+gunicorn web_app:app
 ```
 
-The web platform lets you upload one combined OHLC CSV file or use the live feed, then receive the same strict setup or no-setup output.
+Render build command:
 
-The web platform also accepts PNG, JPG, and WebP chart screenshots for intake. A screenshot by itself does not produce a trade setup because Smart System A requires mechanically verified OHLCV, volume, H4/H1 structure, and checklist data. Upload H4 and H1 CSV files to run the full SSA analysis.
-
-Analysis results are shown in a dashboard with separate sections for H4 trend and wave context, H1 structure and entry behavior, the six-condition SSA checklist, risk metrics, and the exact final SSA output.
-Each strategy also shows a trade plan panel with the current action, entry point, take profit, and stop loss. When rules are not complete, the action remains `WAIT` and the plan explains what must form before entry.
-
-## Analysis Systems
-
-The web platform supports three selectable analysis systems:
-
-- **Smart System A**: H4/H1 XAUUSD analysis with SSA wave, BOS, pullback, volume, and risk rules.
-- **UPAS Trade Assistant**: pure price-action XAUUSD analysis using MN1, W1, D1, H4, and H1. UPAS detects Kangaroo Tail, Last Kiss, Moolah, and Engulfing Trap Bar setups and returns JSON first, then a short summary.
-- **Wave Structure Analyst**: Elliott Wave confirmation layer for XAUUSD. It classifies Wave 3 continuation, ABC correction, Wave 5 exhaustion, or unclear structure. It does not execute trades and returns `WAIT` or `NO_VALID_SETUP` when the wave count is unclear or late.
-
-CSV mode for UPAS requires one OHLC file containing MN1, W1, D1, H4, and H1 rows. Live mode fetches all five timeframes when `TWELVE_DATA_API_KEY` is configured.
-
-CSV mode for Wave Structure Analyst requires one OHLC file containing H4 or H1 rows. When both H4 and H1 rows are present, the app calculates both wave results and lets you select which timeframe result to view. Optional D1, M30, and M15 rows can provide extra context. The Wave CSV template is available from the web app sidebar.
+```text
+pip install -r requirements.txt
+```
 
 ## Live XAUUSD Feed
 
-The web platform can fetch live H4 and H1 XAU/USD candles from Twelve Data.
+Live mode uses Twelve Data.
 
-Set this environment variable before using live mode:
+Environment variable:
 
 ```text
-TWELVE_DATA_API_KEY=your_api_key
+TWELVE_DATA_API_KEY=your_key
 ```
 
-On Render, add it under **Environment** for the web service. Then choose **Live XAUUSD Feed** in the app.
-
-Live mode still follows the same strict Smart System A rules. If the provider returns missing volume, condition 6 fails unless volume override is explicitly enabled.
+If the provider returns missing or partial volume, strict analysis can still reject the setup.
 
 ## MT5 Direct Mode
 
-Gold Smart Agent supports two MT5 workflows.
+MT5 Direct Mode has two workflows.
 
-### Option A: Local Python MT5 Bridge
+### Local Python MT5 Bridge
 
-`mt5_bridge.py` is a read-only Flask API that connects to your local MetaTrader 5 desktop terminal with the `MetaTrader5` Python package. It is designed for RoboForex demo accounts and XAUUSD only.
+The bridge runs on the Windows PC where MetaTrader 5 is installed and logged in.
 
-Install the bridge dependencies on the Windows PC running MT5:
-
-```bash
+```powershell
 pip install -r requirements-mt5-bridge.txt
-```
-
-Set a private API key:
-
-```powershell
 $env:MT5_BRIDGE_API_KEY="change-this-secret"
-```
-
-Optional MT5 login environment variables:
-
-```powershell
-$env:MT5_LOGIN="your_demo_login"
-$env:MT5_PASSWORD="your_demo_password"
-$env:MT5_SERVER="RoboForex-Demo"
-$env:MT5_TERMINAL_PATH="C:\Program Files\MetaTrader 5\terminal64.exe"
-```
-
-Start the local bridge:
-
-```bash
 python mt5_bridge.py
 ```
 
@@ -136,38 +218,22 @@ GET /api/mt5/xauusd/candles?timeframe=H1&limit=100
 GET /api/mt5/xauusd/candles?timeframe=H4&limit=100
 ```
 
-All bridge API calls require:
+Required request header:
 
 ```text
 X-API-Key: your_key
 ```
 
-The candle endpoint returns:
-
-- JSON candle rows
-- `ohlcv_csv` in the same format used by the Gold Smart Agent analyzer:
-
-```text
-timeframe,timestamp,open,high,low,close,volume
-```
-
-To let the hosted Render app call the bridge, the bridge must be reachable from the internet through a secure tunnel or hosted private network. Then set these variables on Render:
+Render cannot call `127.0.0.1` on your PC. To use the bridge from the hosted app, expose it through a secure public URL such as Cloudflare Tunnel, then set:
 
 ```text
 MT5_BRIDGE_URL=https://your-public-bridge-url
-MT5_BRIDGE_API_KEY=change-this-secret
+MT5_BRIDGE_API_KEY=your_key
 ```
 
-When these variables are present, selecting `MT5 Direct Mode` in the web app reads fresh XAUUSD candles from the bridge and runs analysis immediately:
+### MT5 Auto-Push EA
 
-- Smart System A: H4 and H1
-- UPAS: MN1, W1, D1, H4, and H1
-
-The bridge is read-only. It does not place trades.
-
-### Option B: MT5 Auto-Push EA
-
-The fallback EA reads OHLCV candles from MetaTrader 5 and posts them to the web app API every 5 minutes:
+The EA can push OHLCV data from MT5 to the hosted app every 5 minutes:
 
 ```text
 mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5
@@ -179,68 +245,41 @@ Default interval:
 InpPushIntervalSeconds = 300
 ```
 
-The EA pushes all three analysis systems:
+The EA can push all three analysis systems:
 
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
-- Wave Structure Analyst: D1, H4, and H1
+- Wave Structure Analyst: H4 and H1
 
-Each API push also includes a market snapshot:
+The EA payload can also include screenshot metadata for future image-AI modules:
 
-- current XAUUSD price from `SYMBOL_BID` or `SYMBOL_LAST`
-- MT5 timestamp in ISO format
-- 1280 x 720 chart screenshot saved under `MQL5/Files/GoldSmartAgent/`
 - screenshot filename such as `XAUUSD_H1_20260601_153000.png`
 - base64 PNG screenshot in the JSON payload
 
-The screenshot captures the active chart, including candlesticks, indicators, trendlines, and user drawings. Attach the EA to the chart view you want sent. Screenshot history is stored by analysis engine and pruned to the latest 20 images per engine for future image-AI modules such as Elliott Wave recognition, SNR detection, trendline detection, breakout detection, candlestick pattern detection, and price-action validation. These image-AI modules are not active yet.
+Image-AI modules such as Elliott Wave recognition, SNR detection, trendline detection, breakout detection, candlestick pattern detection, and price-action validation are not active yet.
 
-Server endpoint:
+The Python MT5 bridge is the cleaner long-term path.
 
-```text
-POST /api/analyze
+## Useful Commands
+
+Run tests:
+
+```powershell
+python -m pytest
 ```
 
-## Deploy Online
+Check git status:
 
-This project is ready for a Python web host that supports WSGI apps, such as Render, Railway, Fly.io, or Heroku-style platforms.
-
-For step-by-step publishing instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
-
-Recommended Render settings:
-
-```text
-Build Command: pip install -r requirements.txt
-Start Command: gunicorn web_app:app
+```powershell
+& 'C:\Program Files\Git\cmd\git.exe' status --short
 ```
 
-The included `Procfile` also supports hosts that detect Heroku-style Python apps:
+Commit and push:
 
-```text
-web: gunicorn web_app:app
-```
-
-To make it publicly available, push this project to a Git repository and connect that repository to your hosting provider. The app does not need trading credentials because it does not execute trades.
-
-## Test
-
-```bash
-pytest
-```
-
-## Example Valid Setup Output
-
-```text
-Setup Type: BUY LIMIT
-Entry: 4125
-SL: 4115
-TP1: 4135
-TP2: 4145
-Pip Distance: 10.0
-Risk %: 1.2
-Lot Size: 0.3
-Confidence Level: High
-Reasoning Summary: H4 wave position: Wave 3 likely; active wave: 3; market state: expanding. H1 BOS: bullish at 4125; pullback zone: 4125; candle behavior: confirmed rejection/acceptance; volume behavior: impulse volume exceeds pullback volume; all six SSA conditions passed.
+```powershell
+& 'C:\Program Files\Git\cmd\git.exe' add .
+& 'C:\Program Files\Git\cmd\git.exe' commit -m "Your message"
+& 'C:\Program Files\Git\cmd\git.exe' push
 ```
 
 ## Example No Setup Output
@@ -256,4 +295,4 @@ Reasoning Summary: H4 wave position: Wave 3 likely; active wave: 3; market state
 
 ## Risk Warning
 
-This project is an analysis tool only. It is not financial advice, not a signal service, and not an execution bot. It never places trades, never widens SL, never increases risk, and never overrides failed Smart System A rules unless the user explicitly enables the volume override.
+Gold Smart Agent is an analysis tool only. It is not financial advice, not a signal service, and not an execution bot. It does not place trades, widen stop loss, increase risk, or override failed setup rules.
