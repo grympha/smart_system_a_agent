@@ -106,6 +106,55 @@ def latest_chart_screenshot(symbol: str | None = None, analysis_system: str | No
     return _decode_row(row) if row else None
 
 
+def latest_chart_screenshots(
+    symbol: str | None = None,
+    analysis_system: str | None = None,
+    timeframes: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    init_screenshots()
+    selected = {timeframe.upper() for timeframe in (timeframes or [])}
+    query = """
+        SELECT id, created_at, symbol, analysis_system, market_timestamp, current_price, filename, mime_type, image_base64, image_source, metadata_json
+        FROM chart_screenshots
+    """
+    filters = []
+    params: list[str] = []
+    if symbol:
+        filters.append("symbol = ?")
+        params.append(symbol)
+    if analysis_system:
+        filters.append("analysis_system = ?")
+        params.append(analysis_system)
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
+    query += " ORDER BY id DESC"
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(query, params).fetchall()
+
+    latest_by_timeframe: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        item = _decode_row(row)
+        timeframe = str((item.get("metadata") or {}).get("timeframe") or "").upper()
+        if selected and timeframe not in selected:
+            continue
+        if timeframe and timeframe not in latest_by_timeframe:
+            item.pop("image_base64", None)
+            item["image_url"] = f"/screenshots/{item['id']}"
+            latest_by_timeframe[timeframe] = item
+        if selected and selected.issubset(latest_by_timeframe):
+            break
+
+    ordered = []
+    for timeframe in (timeframes or []):
+        item = latest_by_timeframe.get(timeframe.upper())
+        if item:
+            ordered.append(item)
+    if not timeframes:
+        ordered = list(latest_by_timeframe.values())
+    return ordered
+
+
 def get_chart_screenshot_metadata(screenshot_id: int) -> dict[str, Any] | None:
     item = get_chart_screenshot(screenshot_id)
     if not item:

@@ -2,6 +2,13 @@
 
 All notable project changes should be recorded here.
 
+## 2026-06-04
+
+### Added
+
+- Added H1/H4 chart preview support for MT5/API screenshot payloads.
+- Added browser-based hourly auto-analysis monitor endpoint and notification trigger for valid setups or confirmed Wave Structure results.
+
 ## 2026-06-03
 
 ### Added

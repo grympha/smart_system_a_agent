@@ -243,6 +243,47 @@ def test_api_analyze_stores_market_snapshot_and_chart_image() -> None:
     assert image_response.mimetype == "image/png"
 
 
+def test_api_analyze_accepts_h1_h4_chart_images() -> None:
+    text = "timeframe,timestamp,open,high,low,close,volume\n"
+    for timeframe, data in [("H4", _bullish_h4()), ("H1", _bullish_h1())]:
+        for c in data.candles:
+            text += f"{timeframe},{c.timestamp},{c.open},{c.high},{c.low},{c.close},{c.volume}\n"
+    buffer = BytesIO()
+    Image.new("RGB", (32, 18), color="white").save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+
+    client = app.test_client()
+    response = client.post(
+        "/api/analyze",
+        json={
+            "analysis_system": "ssa",
+            "symbol": "XAUUSD",
+            "current_price": 3368.45,
+            "timestamp": "2026-06-01T15:30:00",
+            "chart_images": {"H1": encoded, "H4": encoded},
+            "ohlc_csv": text,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["market_snapshot"]["chart_count"] == 2
+    assert len(payload["chart_snapshot"]["additional_snapshots"]) == 2
+
+
+def test_hourly_auto_analysis_waits_without_bridge(monkeypatch) -> None:
+    monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
+    monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)
+    client = app.test_client()
+
+    response = client.post("/api/auto-analysis/hourly", json={"systems": ["ssa", "upas", "wave"]})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert payload["status"] == "WAITING_FOR_MT5_BRIDGE"
+
+
 def test_wave_trade_plan_rejects_sell_entry_below_current_price() -> None:
     wave = WaveAnalysisResult(
         symbol="XAUUSD",

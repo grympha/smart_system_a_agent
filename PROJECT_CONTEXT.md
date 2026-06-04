@@ -148,9 +148,24 @@ H1,2026-01-01 01:00,4108,4112,4101,4105,950
 
 Chart screenshot upload is currently preview/intake only. It does not replace OHLCV analysis.
 
+MT5/API screenshot payloads can include both H1 and H4 previews:
+
+```json
+{
+  "chart_images": {
+    "H1": "base64_png",
+    "H4": "base64_png"
+  }
+}
+```
+
+The dashboard displays both previews when both are available. A single legacy `chart_image` payload still works.
+
 History rows should be clickable and show the full dashboard result, not raw JSON-only output.
 
 The UI should remain mobile friendly, dark themed, and premium-looking.
+
+Hourly monitoring is browser-based in the first version. While the page is open, the browser calls `/api/auto-analysis/hourly` every hour and can show a browser notification when Smart System A or UPAS returns `VALID_TRADE`, or Wave Structure Analyst returns `WAVE_CONFIRMED`. Browser notifications require the user to click `Enable Hourly Alerts` and allow notifications.
 
 ## Environment Variables
 
