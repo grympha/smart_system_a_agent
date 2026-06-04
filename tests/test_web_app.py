@@ -171,6 +171,30 @@ def test_mt5_direct_mode_renders_market_snapshot_and_latest_chart(monkeypatch) -
     assert chart["image_url"].encode() in response.data
 
 
+def test_mt5_direct_mode_generates_h1_h4_chart_previews_from_ohlcv(monkeypatch) -> None:
+    monkeypatch.setattr(web_module, "latest_chart_screenshots", lambda *args, **kwargs: [])
+    monkeypatch.setattr(web_module, "latest_chart_screenshot", lambda *args, **kwargs: None)
+    monkeypatch.setattr(web_module, "mt5_bridge_configured", lambda: True)
+    monkeypatch.setattr(
+        web_module,
+        "fetch_mt5_bridge_data",
+        lambda timeframes: {"H4": _bullish_h4(), "H1": _bullish_h1()},
+    )
+    monkeypatch.setattr(
+        web_module,
+        "fetch_mt5_bridge_snapshot",
+        lambda: {"ok": True, "current_price": 3368.45, "timestamp": "2026-06-04 18:00:00"},
+    )
+
+    client = app.test_client()
+    response = client.post("/", data={"data_source": "mt5", "analysis_system": "ssa"})
+
+    assert response.status_code == 200
+    assert b"Latest Chart Preview" in response.data
+    assert b"H1 Preview" in response.data
+    assert b"H4 Preview" in response.data
+
+
 def test_template_downloads() -> None:
     client = app.test_client()
 

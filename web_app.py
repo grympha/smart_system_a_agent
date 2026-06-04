@@ -10,6 +10,7 @@ from io import StringIO
 from io import TextIOWrapper
 
 from flask import Flask, Response, jsonify, render_template_string, request
+from PIL import Image, ImageDraw, ImageFont
 
 from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from mt5_requests import consume_next_mt5_request, create_mt5_request
@@ -2619,12 +2620,108 @@ def build_mt5_direct_market_context(
     chart_snapshots = latest_chart_screenshots(symbol, display_name, ["H1", "H4"])
     if not chart_snapshots and normalized_symbol != symbol:
         chart_snapshots = latest_chart_screenshots(normalized_symbol, display_name, ["H1", "H4"])
+    if not chart_snapshots:
+        chart_snapshots = generated_chart_snapshots_from_multi(multi, display_name, normalized_symbol)
     chart_snapshot = preferred_chart_snapshot(chart_snapshots) if chart_snapshots else latest_chart_screenshot(symbol, display_name)
     if chart_snapshot:
         chart_snapshot.pop("image_base64", None)
         chart_snapshot["image_url"] = f"/screenshots/{chart_snapshot['id']}"
         chart_snapshot = with_additional_chart_snapshots(chart_snapshot, chart_snapshots or [chart_snapshot])
     return build_market_snapshot(current_price, str(timestamp or malaysia_now_text()), chart_snapshot), chart_snapshot
+
+
+def generated_chart_snapshots_from_multi(
+    multi: dict[str, object],
+    analysis_system: str,
+    symbol: str,
+) -> list[dict[str, object]]:
+    snapshots = []
+    for timeframe in ["H1", "H4"]:
+        data = multi.get(timeframe)
+        candles = getattr(data, "candles", []) if data else []
+        if not candles:
+            continue
+        image_base64 = render_candlestick_chart_base64(candles[-80:], symbol, timeframe)
+        latest = candles[-1]
+        snapshots.append(
+            add_chart_screenshot(
+                symbol=symbol,
+                analysis_system=analysis_system,
+                market_timestamp=str(latest.timestamp),
+                current_price=latest.close,
+                filename=f"{symbol}_{timeframe}_generated_chart.png",
+                image_base64=image_base64,
+                mime_type="image/png",
+                image_source="generated_ohlcv",
+                metadata={"timeframe": timeframe, "generated_from_ohlcv": True},
+            )
+        )
+    return snapshots
+
+
+def render_candlestick_chart_base64(candles: list[object], symbol: str, timeframe: str) -> str:
+    width, height = 1180, 620
+    margin_left, margin_right, margin_top, margin_bottom = 72, 88, 54, 70
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    image = Image.new("RGB", (width, height), "#08111f")
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.load_default()
+
+    highs = [float(c.high) for c in candles]
+    lows = [float(c.low) for c in candles]
+    highest = max(highs)
+    lowest = min(lows)
+    price_range = max(highest - lowest, 1.0)
+    padding = price_range * 0.08
+    top_price = highest + padding
+    bottom_price = lowest - padding
+    full_range = top_price - bottom_price
+
+    def y_for(price: float) -> float:
+        return margin_top + ((top_price - price) / full_range) * plot_height
+
+    draw.rectangle((0, 0, width, height), fill="#08111f")
+    draw.rectangle((margin_left, margin_top, width - margin_right, height - margin_bottom), outline="#243247", fill="#0f1726")
+    draw.text((24, 20), f"{symbol} {timeframe} OHLC Preview", fill="#e8eefc", font=font)
+    draw.text((24, height - 34), f"Generated from latest {len(candles)} OHLCV candles", fill="#8ea0bd", font=font)
+
+    for index in range(6):
+        price = bottom_price + (full_range / 5) * index
+        y = y_for(price)
+        draw.line((margin_left, y, width - margin_right, y), fill="#1e2a3d")
+        draw.text((width - margin_right + 10, y - 6), f"{price:.2f}", fill="#9fb0ca", font=font)
+
+    candle_count = len(candles)
+    slot = plot_width / max(candle_count, 1)
+    body_width = max(3, min(12, slot * 0.58))
+    for index, candle in enumerate(candles):
+        open_price = float(candle.open)
+        close_price = float(candle.close)
+        high_price = float(candle.high)
+        low_price = float(candle.low)
+        x = margin_left + slot * index + slot / 2
+        color = "#4ade80" if close_price >= open_price else "#fb7185"
+        wick_color = "#b7c6dd"
+        high_y = y_for(high_price)
+        low_y = y_for(low_price)
+        open_y = y_for(open_price)
+        close_y = y_for(close_price)
+        draw.line((x, high_y, x, low_y), fill=wick_color, width=1)
+        top = min(open_y, close_y)
+        bottom = max(open_y, close_y)
+        if bottom - top < 2:
+            bottom = top + 2
+        draw.rectangle((x - body_width / 2, top, x + body_width / 2, bottom), fill=color, outline=color)
+
+    last = candles[-1]
+    last_y = y_for(float(last.close))
+    draw.line((margin_left, last_y, width - margin_right, last_y), fill="#d6b937", width=1)
+    draw.text((width - margin_right + 10, last_y + 8), f"Last {float(last.close):.2f}", fill="#d6b937", font=font)
+
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 def latest_candle_from_multi(multi: dict[str, object]) -> object | None:

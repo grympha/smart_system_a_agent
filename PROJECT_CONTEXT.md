@@ -161,6 +161,8 @@ MT5/API screenshot payloads can include both H1 and H4 previews:
 
 The dashboard displays both previews when both are available. A single legacy `chart_image` payload still works.
 
+If MT5 Direct Mode has OHLCV candle data but no screenshot payload, the app generates H1/H4 candlestick preview images from the latest OHLCV candles using Pillow and stores them in the same screenshot store.
+
 History rows should be clickable and show the full dashboard result, not raw JSON-only output.
 
 The UI should remain mobile friendly, dark themed, and premium-looking.
