@@ -9,6 +9,7 @@ All notable project changes should be recorded here.
 - Added H1/H4 chart preview support for MT5/API screenshot payloads.
 - Added automatic H1/H4 OHLCV-generated candlestick previews when MT5 does not provide screenshot images.
 - Added browser-based hourly auto-analysis monitor endpoint and notification trigger for valid setups or confirmed Wave Structure results.
+- Added optional Telegram notifications for hourly setup and wave-confirmation alerts.
 
 ## 2026-06-03
 

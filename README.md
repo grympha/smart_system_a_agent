@@ -195,6 +195,30 @@ TWELVE_DATA_API_KEY=your_key
 
 If the provider returns missing or partial volume, strict analysis can still reject the setup.
 
+## Telegram Notifications
+
+Gold Smart Agent can send Telegram alerts when hourly MT5 auto-analysis finds:
+
+- Smart System A `VALID_TRADE`
+- UPAS `VALID_TRADE`
+- Wave Structure Analyst `WAVE_CONFIRMED`
+
+Set these environment variables on Render:
+
+```text
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+PUBLIC_APP_URL=https://smart-system-a-agent.onrender.com
+```
+
+Test endpoint:
+
+```text
+POST /api/notifications/telegram/test
+```
+
+Telegram is optional. If the token or chat ID is missing, alerts are skipped and the analysis still runs.
+
 ## MT5 Direct Mode
 
 MT5 Direct Mode has two workflows.

@@ -167,7 +167,9 @@ History rows should be clickable and show the full dashboard result, not raw JSO
 
 The UI should remain mobile friendly, dark themed, and premium-looking.
 
-Hourly monitoring is browser-based in the first version. While the page is open, the browser calls `/api/auto-analysis/hourly` every hour and can show a browser notification when Smart System A or UPAS returns `VALID_TRADE`, or Wave Structure Analyst returns `WAVE_CONFIRMED`. Browser notifications require the user to click `Enable Hourly Alerts` and allow notifications.
+Hourly monitoring runs through `/api/auto-analysis/hourly`. While the page is open, the browser calls it every hour and can show a browser notification when Smart System A or UPAS returns `VALID_TRADE`, or Wave Structure Analyst returns `WAVE_CONFIRMED`. Browser notifications require the user to click `Enable Hourly Alerts` and allow notifications.
+
+Telegram notifications are also supported. When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured, the hourly endpoint sends a Telegram message for each alert result. Use `POST /api/notifications/telegram/test` to verify the server can send Telegram messages.
 
 ## Environment Variables
 
@@ -177,6 +179,9 @@ Main web app:
 TWELVE_DATA_API_KEY=your_twelve_data_key
 MT5_BRIDGE_URL=https://your-public-mt5-bridge-url
 MT5_BRIDGE_API_KEY=your_bridge_key
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_telegram_chat_id
+PUBLIC_APP_URL=https://smart-system-a-agent.onrender.com
 ```
 
 Local MT5 bridge:

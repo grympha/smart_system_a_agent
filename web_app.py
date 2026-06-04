@@ -1524,6 +1524,30 @@ def api_ping() -> Response:
     return jsonify({"ok": True, "status": "READY", "service": "Gold Smart Agent"})
 
 
+@app.post("/api/notifications/telegram/test")
+def api_telegram_test() -> Response:
+    if not telegram_configured():
+        return jsonify(
+            {
+                "ok": False,
+                "status": "TELEGRAM_NOT_CONFIGURED",
+                "message": "Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.",
+            }
+        ), 200
+    result = send_telegram_alert(
+        {
+            "system_used": "Gold Smart Agent",
+            "status": "TEST",
+            "setup_name": "Telegram notification test",
+            "score": "n/a",
+            "created_at": malaysia_now_text(),
+            "summary": "Telegram notifications are connected.",
+            "history_url": "",
+        }
+    )
+    return jsonify({"ok": bool(result.get("ok")), "status": "SENT" if result.get("ok") else "FAILED", "result": result})
+
+
 @app.post("/api/auto-analysis/hourly")
 def api_hourly_auto_analysis() -> Response:
     if not mt5_bridge_configured():
@@ -1558,6 +1582,7 @@ def api_hourly_auto_analysis() -> Response:
             results.append(summary)
             if is_alert_result(item):
                 alerts.append(summary)
+                send_telegram_alert(summary)
         except Exception as exc:
             errors.append({"system": display_system_name(system), "message": str(exc)})
 
@@ -1622,6 +1647,65 @@ def run_mt5_bridge_analysis(analysis_system: str) -> dict[str, object]:
 def is_alert_result(item: dict[str, object]) -> bool:
     status = str(item.get("status") or "").upper()
     return status in {"VALID_TRADE", "WAVE_CONFIRMED"}
+
+
+def telegram_configured() -> bool:
+    return bool(os.getenv("TELEGRAM_BOT_TOKEN") and os.getenv("TELEGRAM_CHAT_ID"))
+
+
+def send_telegram_alert(alert: dict[str, object]) -> dict[str, object]:
+    if not telegram_configured():
+        return {"ok": False, "skipped": True, "reason": "Telegram is not configured."}
+
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    message = format_telegram_alert(alert)
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps(
+        {
+            "chat_id": chat_id,
+            "text": message,
+            "disable_web_page_preview": True,
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            data = json.loads(exc.read().decode("utf-8"))
+            message = data.get("description") or str(exc)
+        except Exception:
+            message = str(exc)
+        return {"ok": False, "skipped": False, "error": f"Telegram error: {message}"}
+    except urllib.error.URLError as exc:
+        return {"ok": False, "skipped": False, "error": f"Cannot reach Telegram: {exc.reason}"}
+    return {"ok": bool(data.get("ok")), "skipped": False, "response": data}
+
+
+def format_telegram_alert(alert: dict[str, object]) -> str:
+    lines = [
+        "Gold Smart Agent Alert",
+        "",
+        f"System: {alert.get('system_used', 'Unknown')}",
+        f"Status: {clean_status(alert.get('status'))}",
+        f"Setup: {alert.get('setup_name') or 'None'}",
+        f"Score: {alert.get('score') or 'n/a'}",
+        f"Time: {alert.get('created_at') or malaysia_now_text()}",
+        "",
+        f"Summary: {alert.get('summary') or 'No summary available.'}",
+    ]
+    history_url = alert.get("history_url")
+    if history_url:
+        base_url = os.getenv("PUBLIC_APP_URL", "https://smart-system-a-agent.onrender.com").rstrip("/")
+        lines.extend(["", f"Open result: {base_url}{history_url}"])
+    return "\n".join(str(line) for line in lines)
 
 
 @app.route("/", methods=["GET", "POST"])

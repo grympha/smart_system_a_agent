@@ -37,6 +37,39 @@ def test_api_ping() -> None:
     assert response.get_json()["status"] == "READY"
 
 
+def test_telegram_test_endpoint_reports_missing_config(monkeypatch) -> None:
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    client = app.test_client()
+
+    response = client.post("/api/notifications/telegram/test")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert payload["status"] == "TELEGRAM_NOT_CONFIGURED"
+
+
+def test_format_telegram_alert_uses_public_app_url(monkeypatch) -> None:
+    monkeypatch.setenv("PUBLIC_APP_URL", "https://example.com/app/")
+    message = web_module.format_telegram_alert(
+        {
+            "system_used": "Wave Structure Analyst",
+            "status": "WAVE_CONFIRMED",
+            "setup_name": "Wave 3 Continuation",
+            "score": "8/10",
+            "created_at": "2026-06-04 18:00:00 MYT",
+            "summary": "Wave confirmation detected.",
+            "history_url": "/history/123",
+        }
+    )
+
+    assert "Gold Smart Agent Alert" in message
+    assert "System: Wave Structure Analyst" in message
+    assert "Status: Wave Confirmed" in message
+    assert "https://example.com/app/history/123" in message
+
+
 def test_clean_status_formats_machine_labels() -> None:
     assert clean_status("NO_TRADE") == "No Trade"
     assert clean_status("NO_VALID_SETUP") == "No Valid Setup"
