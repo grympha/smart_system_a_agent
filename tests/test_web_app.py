@@ -666,6 +666,28 @@ def test_mt5_direct_mode_uses_bridge_when_configured(monkeypatch) -> None:
     assert b"Six-Condition SSA Checklist" in response.data
 
 
+def test_mt5_bridge_derives_m15_when_older_bridge_rejects_timeframe(monkeypatch) -> None:
+    monkeypatch.setenv("MT5_BRIDGE_URL", "http://bridge.local")
+    monkeypatch.setenv("MT5_BRIDGE_API_KEY", "secret")
+    template_lines = elliot_wave3_template_csv().splitlines()
+    header = template_lines[0]
+
+    def fake_bridge_json(url: str, api_key: str) -> dict[str, object]:
+        if "timeframe=M15" in url:
+            raise ValueError("MT5 Bridge error: Unsupported timeframe. Use MN1, W1, D1, H4, or H1.")
+        timeframe = "H4" if "timeframe=H4" in url else "H1"
+        rows = [line for line in template_lines[1:] if line.startswith(f"{timeframe},")]
+        return {"ok": True, "ohlcv_csv": "\n".join([header, *rows]) + "\n"}
+
+    monkeypatch.setattr(web_module, "fetch_mt5_bridge_json", fake_bridge_json)
+
+    multi = web_module.fetch_mt5_bridge_data(["H4", "H1", "M15"])
+
+    assert set(multi) == {"H4", "H1", "M15"}
+    assert multi["M15"].timeframe == "M15"
+    assert len(multi["M15"].candles) == len(multi["H1"].candles) * 4
+
+
 def test_upas_history_detail_shows_dashboard_result(monkeypatch) -> None:
     monkeypatch.delenv("MT5_BRIDGE_URL", raising=False)
     monkeypatch.delenv("MT5_BRIDGE_API_KEY", raising=False)

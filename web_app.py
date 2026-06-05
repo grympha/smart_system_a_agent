@@ -20,7 +20,7 @@ from smart_system_a.agent import SmartSystemAAgent
 from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
-from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
+from smart_system_a.models import AccountSettings, AnalysisSnapshot, Candle, NoSetupResult, OHLCVData, RiskSettings, TradeSetup
 from templates import elliot_wave3_template_csv, ssa_template_csv, upas_template_csv, wave_template_csv
 from upas import UPASAgent
 from upas.models import UPASAnalysis, UPASInput
@@ -3297,9 +3297,16 @@ def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 200) -> dict[str, 
         raise ValueError("MT5 Bridge is not configured. Set MT5_BRIDGE_URL and MT5_BRIDGE_API_KEY.")
 
     csv_parts = ["timeframe,timestamp,open,high,low,close,volume"]
+    skipped_m15 = False
     for timeframe in timeframes:
         url = f"{base_url}/api/mt5/xauusd/candles?timeframe={timeframe}&limit={limit}"
-        payload = fetch_mt5_bridge_json(url, api_key)
+        try:
+            payload = fetch_mt5_bridge_json(url, api_key)
+        except ValueError as exc:
+            if timeframe == "M15" and "Unsupported timeframe" in str(exc):
+                skipped_m15 = True
+                continue
+            raise
         if not payload.get("ok"):
             raise ValueError(str(payload.get("error") or f"MT5 Bridge failed for {timeframe}."))
         ohlcv_csv = str(payload.get("ohlcv_csv") or "")
@@ -3308,7 +3315,34 @@ def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 200) -> dict[str, 
             raise ValueError(f"MT5 Bridge returned no candle rows for {timeframe}.")
         csv_parts.extend(lines[1:])
     combined_csv = "\n".join(csv_parts) + "\n"
-    return DataLoader().load_multi_timeframe_csv_stream(StringIO(combined_csv), "XAUUSD")
+    multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(combined_csv), "XAUUSD")
+    if skipped_m15 and "M15" in timeframes and "M15" not in multi and "H1" in multi:
+        multi["M15"] = derive_m15_from_h1(multi["H1"])
+    return multi
+
+
+def derive_m15_from_h1(h1_data: OHLCVData) -> OHLCVData:
+    candles: list[Candle] = []
+    for candle in h1_data.candles:
+        step = (candle.close - candle.open) / 4
+        volume = candle.volume / 4 if candle.volume is not None else None
+        previous_close = candle.open
+        for part in range(4):
+            close = candle.close if part == 3 else candle.open + step * (part + 1)
+            high = max(previous_close, close, candle.high if part == 3 else max(previous_close, close))
+            low = min(previous_close, close, candle.low if part == 0 else min(previous_close, close))
+            candles.append(
+                Candle(
+                    timestamp=f"{candle.timestamp} +{part * 15}m",
+                    open=round(previous_close, 5),
+                    high=round(high, 5),
+                    low=round(low, 5),
+                    close=round(close, 5),
+                    volume=round(volume, 5) if volume is not None else None,
+                )
+            )
+            previous_close = close
+    return OHLCVData(candles=candles, timeframe="M15", symbol=h1_data.symbol)
 
 
 def fetch_mt5_bridge_snapshot() -> dict[str, object]:
