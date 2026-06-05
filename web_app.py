@@ -12,6 +12,7 @@ from io import TextIOWrapper
 from flask import Flask, Response, jsonify, render_template_string, request
 from PIL import Image, ImageDraw, ImageFont
 
+from elliot_wave3 import ElliotWave3Analyzer, ElliotWave3Result
 from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from mt5_requests import consume_next_mt5_request, create_mt5_request
 from screenshot_store import add_chart_screenshot, get_chart_screenshot, latest_chart_screenshot, latest_chart_screenshots, screenshot_bytes
@@ -20,7 +21,7 @@ from smart_system_a.data_loader import DataLoader
 from smart_system_a.image_input import ImageInputValidator
 from smart_system_a.live_data import LiveXAUUSDFeed
 from smart_system_a.models import AccountSettings, AnalysisSnapshot, NoSetupResult, RiskSettings, TradeSetup
-from templates import ssa_template_csv, upas_template_csv, wave_template_csv
+from templates import elliot_wave3_template_csv, ssa_template_csv, upas_template_csv, wave_template_csv
 from upas import UPASAgent
 from upas.models import UPASAnalysis, UPASInput
 from wave_structure import WaveAnalysisInput, WaveAnalysisResult, WaveStructureAnalyst
@@ -681,6 +682,7 @@ PAGE = """
           <option value="ssa" {% if form.analysis_system == "ssa" %}selected{% endif %}>Smart System A</option>
           <option value="upas" {% if form.analysis_system == "upas" %}selected{% endif %}>UPAS Trade Assistant</option>
           <option value="wave" {% if form.analysis_system == "wave" %}selected{% endif %}>Wave Structure Analyst</option>
+          <option value="elliot_wave3" {% if form.analysis_system == "elliot_wave3" %}selected{% endif %}>Elliot Wave 3 Analysis</option>
         </select>
         <label for="data_source">Data Source</label>
         <select id="data_source" name="data_source">
@@ -689,12 +691,13 @@ PAGE = """
           <option value="mt5" {% if form.data_source == "mt5" %}selected{% endif %}>MT5 Direct Mode</option>
         </select>
         <div class="csv-only">
-          <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. Smart System A: H4/H1. UPAS: MN1/W1/D1/H4/H1. Wave Structure Analyst: H4/H1, optional D1/M30/M15.">!</span></label>
+          <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. Smart System A: H4/H1. UPAS: MN1/W1/D1/H4/H1. Wave Structure Analyst: H4/H1, optional D1/M30/M15. Elliot Wave 3 Analysis: H4/H1/M15.">!</span></label>
           <input id="ohlc_data" name="ohlc_data" type="file" accept=".csv">
           <div class="quick-actions">
             <a href="/templates/ssa.csv">SSA CSV Template</a>
             <a href="/templates/upas.csv">UPAS CSV Template</a>
             <a href="/templates/wave.csv">Wave CSV Template</a>
+            <a href="/templates/elliot-wave3.csv">Elliot Wave 3 CSV Template</a>
           </div>
         </div>
         <label for="chart_image">Chart Screenshot</label>
@@ -790,6 +793,33 @@ PAGE = """
                       <div class="metric"><span>Wave Score</span>{{ item.detail.wave_score }}/10</div>
                       <div class="metric"><span>Trading Bias</span>{{ item.detail.trading_bias|clean_status }}</div>
                     </div>
+                  </div>
+                </div>
+              {% elif item.system_used == "Elliot Wave 3 Analysis" and item.detail %}
+                <div class="dashboard">
+                  <div class="panel">
+                    <h2 class="panel-title">MT5 Elliot Wave 3 Analysis</h2>
+                    <div class="grid">
+                      <div class="metric"><span>Direction</span>{{ item.detail.direction|clean_status }}</div>
+                      <div class="metric"><span>Score</span>{{ item.detail.score }}/100</div>
+                      <div class="metric"><span>Rating</span>{{ item.detail.rating }}</div>
+                      <div class="metric"><span>Wave 2 Retracement</span>{{ item.detail.wave2_retracement if item.detail.wave2_retracement is not none else "None" }}%</div>
+                      <div class="metric"><span>Wave 3 Projection</span>{{ item.detail.wave3_projection if item.detail.wave3_projection is not none else "None" }}x</div>
+                      <div class="metric"><span>H1 Momentum</span>{{ item.detail.h1_momentum }}</div>
+                      <div class="metric"><span>M15 Trigger</span>{{ item.detail.m15_trigger }}</div>
+                      <div class="metric"><span>Volume Ratio</span>{{ item.detail.volume_ratio if item.detail.volume_ratio is not none else "None" }}x</div>
+                    </div>
+                  </div>
+                  <div class="panel">
+                    <h2 class="panel-title">MT5 Elliot Wave 3 Checklist</h2>
+                    <ul class="checklist">
+                      {% for key, check in item.detail.checklist.items() %}
+                        <li>
+                          <span>{{ key.replace('_', ' ').title() }} - {{ check.reason }}</span>
+                          <span class="pill {{ 'pass' if check.passed else 'fail' }}">{{ 'PASS' if check.passed else 'FAIL' }}</span>
+                        </li>
+                      {% endfor %}
+                    </ul>
                   </div>
                 </div>
               {% endif %}
@@ -962,6 +992,68 @@ PAGE = """
                       <div class="metric"><span>{{ key.replace('_', ' ').title() }}</span>{{ value if value is not none else "None" }}</div>
                     {% endfor %}
                   </div>
+                </div>
+              {% endif %}
+            </div>
+          {% elif ew3_analysis %}
+            <div class="status {{ '' if ew3_analysis.status == 'VALID_TRADE' else 'no-setup' }}">{{ ew3_analysis.status|clean_status }}</div>
+            {% if trade_plan %}
+              <div class="panel">
+                <h2 class="panel-title">Trade Plan</h2>
+                <div class="grid">
+                  <div class="metric"><span>Action</span>{{ trade_plan.action }}</div>
+                  <div class="metric"><span>Entry Point</span>{{ trade_plan.entry_point }}</div>
+                  <div class="metric"><span>Take Profit</span>{{ trade_plan.take_profit }}</div>
+                  <div class="metric"><span>Stop Loss</span>{{ trade_plan.stop_loss }}</div>
+                </div>
+              </div>
+            {% endif %}
+            <div class="dashboard">
+              <div class="panel">
+                <h2 class="panel-title">Elliot Wave 3 Analysis</h2>
+                <div class="grid">
+                  <div class="metric"><span>Direction</span>{{ ew3_analysis.direction|clean_status }}</div>
+                  <div class="metric"><span>Score</span>{{ ew3_analysis.score }}/100</div>
+                  <div class="metric"><span>Rating</span>{{ ew3_analysis.rating }}</div>
+                  <div class="metric"><span>Wave 2 Retracement</span>{{ ew3_analysis.wave2_retracement if ew3_analysis.wave2_retracement is not none else "None" }}%</div>
+                  <div class="metric"><span>Wave 3 Projection</span>{{ ew3_analysis.wave3_projection if ew3_analysis.wave3_projection is not none else "None" }}x</div>
+                  <div class="metric"><span>Impulse ATR</span>{{ ew3_analysis.impulse_atr_multiple if ew3_analysis.impulse_atr_multiple is not none else "None" }}x</div>
+                  <div class="metric"><span>H1 Momentum</span>{{ ew3_analysis.h1_momentum }}</div>
+                  <div class="metric"><span>M15 Trigger</span>{{ ew3_analysis.m15_trigger }}</div>
+                  <div class="metric"><span>Volume Ratio</span>{{ ew3_analysis.volume_ratio if ew3_analysis.volume_ratio is not none else "None" }}x</div>
+                  <div class="metric"><span>Risk Reward</span>1:{{ ew3_analysis.risk_reward }}</div>
+                </div>
+              </div>
+              <div class="panel">
+                <h2 class="panel-title">Elliot Wave 3 Checklist</h2>
+                <ul class="checklist">
+                  {% for key, check in ew3_analysis.checklist.items() %}
+                    <li>
+                      <span>{{ key.replace('_', ' ').title() }} - {{ check.reason }}</span>
+                      <span class="pill {{ 'pass' if check.passed else 'fail' }}">{{ 'PASS' if check.passed else 'FAIL' }}</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="decision-summary">
+                <h2>Elliot Wave 3 Decision Summary</h2>
+                <dl class="summary-list">
+                  {% for item in summary_details %}
+                    <div class="summary-row">
+                      <dt>{{ item.label }}</dt>
+                      <dd>{{ item.value|clean_status }}</dd>
+                    </div>
+                  {% endfor %}
+                </dl>
+              </div>
+              {% if why_no_trade %}
+                <div class="why-panel">
+                  <h2>Why No Trade?</h2>
+                  <ul class="why-list">
+                    {% for item in why_no_trade %}
+                      <li><strong>{{ item.title }}</strong><br>{{ item.detail }}</li>
+                    {% endfor %}
+                  </ul>
                 </div>
               {% endif %}
             </div>
@@ -1152,7 +1244,7 @@ PAGE = """
       {% else %}
         <div class="panel">
           <strong>Choose an analysis system, then upload one OHLC CSV or use the live XAUUSD feed.</strong>
-          <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Wave Structure Analyst requires H4 or H1 rows and supports optional D1, M30, and M15 context.</p>
+          <p class="muted">Smart System A requires H4 and H1 rows. UPAS requires MN1, W1, D1, H4, and H1 rows. Wave Structure Analyst requires H4 or H1 rows and supports optional D1, M30, and M15 context. Elliot Wave 3 Analysis requires H4, H1, and M15 rows.</p>
         </div>
       {% endif %}
       {% if history %}
@@ -1255,7 +1347,7 @@ PAGE = """
         const response = await fetch("/api/auto-analysis/hourly", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ systems: ["ssa", "upas", "wave"] }),
+          body: JSON.stringify({ systems: ["ssa", "upas", "wave", "elliot_wave3"] }),
         });
         const payload = await response.json();
         const seen = readSeenAlerts();
@@ -1315,6 +1407,15 @@ def download_wave_template() -> Response:
         wave_template_csv(),
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=wave_structure_ohlc_template.csv"},
+    )
+
+
+@app.get("/templates/elliot-wave3.csv")
+def download_elliot_wave3_template() -> Response:
+    return Response(
+        elliot_wave3_template_csv(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=elliot_wave3_ohlc_template.csv"},
     )
 
 
@@ -1439,6 +1540,29 @@ def api_analyze() -> Response:
     try:
         market_snapshot, chart_snapshot = intake_market_context(payload, analysis_system, symbol)
         multi = DataLoader().load_multi_timeframe_csv_stream(StringIO(ohlc_csv), symbol)
+        if analysis_system == "elliot_wave3":
+            missing = [tf for tf in ["H4", "H1", "M15"] if tf not in multi]
+            if missing:
+                raise ValueError(f"Elliot Wave 3 Analysis OHLC data missing timeframe rows: {', '.join(missing)}")
+            ew3 = analyze_elliot_wave3_from_multi(multi, symbol=str(symbol), current_price=parse_optional_float(payload.get("current_price")))
+            trade_plan = build_elliot_wave3_trade_plan(ew3)
+            mt5_status = build_mt5_data_status([multi["H4"], multi["H1"], multi["M15"]])
+            save_elliot_wave3_history(ew3, source="mt5", mt5_data_status=mt5_status, market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
+            return jsonify(
+                {
+                    "ok": True,
+                    "analysis_system": "Elliot Wave 3 Analysis",
+                    "market_snapshot": market_snapshot,
+                    "chart_snapshot": chart_snapshot,
+                    "chart_snapshots": chart_snapshot.get("additional_snapshots", [chart_snapshot]) if chart_snapshot else [],
+                    "status": ew3.status,
+                    "result": ew3.__dict__,
+                    "trade_plan": trade_plan,
+                    "summary": build_elliot_wave3_summary(ew3),
+                    "output": format_elliot_wave3_result(ew3),
+                    "safety": "Analysis only. No trade execution.",
+                }
+            )
         if analysis_system == "wave":
             current_market_price = parse_optional_float(payload.get("current_price"))
             wave_results = analyze_wave_results_from_multi(multi, current_price=current_market_price)
@@ -1561,8 +1685,8 @@ def api_hourly_auto_analysis() -> Response:
             }
         ), 200
 
-    requested = (request.get_json(silent=True) or {}).get("systems") or ["ssa", "upas", "wave"]
-    systems = [system for system in requested if system in {"ssa", "upas", "wave"}]
+    requested = (request.get_json(silent=True) or {}).get("systems") or ["ssa", "upas", "wave", "elliot_wave3"]
+    systems = [system for system in requested if system in {"ssa", "upas", "wave", "elliot_wave3"}]
     results = []
     alerts = []
     errors = []
@@ -1599,12 +1723,25 @@ def api_hourly_auto_analysis() -> Response:
 
 
 def run_mt5_bridge_analysis(analysis_system: str) -> dict[str, object]:
-    bridge_timeframes = ["MN1", "W1", "D1", "H4", "H1"] if analysis_system == "upas" else (["D1", "H4", "H1"] if analysis_system == "wave" else ["H4", "H1"])
+    bridge_timeframes = (
+        ["MN1", "W1", "D1", "H4", "H1"]
+        if analysis_system == "upas"
+        else (["D1", "H4", "H1"] if analysis_system == "wave" else (["H4", "H1", "M15"] if analysis_system == "elliot_wave3" else ["H4", "H1"]))
+    )
     multi = fetch_mt5_bridge_data(bridge_timeframes)
     market_snapshot, chart_snapshot = build_mt5_direct_market_context(multi, analysis_system, "XAUUSD")
     display_name = display_system_name(analysis_system)
 
-    if analysis_system == "upas":
+    if analysis_system == "elliot_wave3":
+        ew3 = analyze_elliot_wave3_from_multi(multi, current_price=snapshot_current_price(market_snapshot))
+        save_elliot_wave3_history(
+            ew3,
+            source="mt5",
+            mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"], multi["M15"]]),
+            market_snapshot=market_snapshot,
+            chart_snapshot=chart_snapshot,
+        )
+    elif analysis_system == "upas":
         upas_input = UPASInput(mn1=multi["MN1"], w1=multi["W1"], d1=multi["D1"], h4=multi["H4"], h1=multi["H1"])
         upas_analysis = UPASAgent().analyze(upas_input)
         save_upas_history(
@@ -1729,6 +1866,7 @@ def index():
     checklist_items = []
     upas_analysis = None
     wave_analysis = None
+    ew3_analysis = None
     wave_results = {}
     trade_plan = None
     summary_details = []
@@ -1778,11 +1916,23 @@ def index():
                 selected_system = display_system_name(form["analysis_system"])
                 requested_mt5_system = selected_system
                 if mt5_bridge_configured():
-                    bridge_timeframes = ["MN1", "W1", "D1", "H4", "H1"] if form["analysis_system"] == "upas" else (["D1", "H4", "H1"] if form["analysis_system"] == "wave" else ["H4", "H1"])
+                    bridge_timeframes = (
+                        ["MN1", "W1", "D1", "H4", "H1"]
+                        if form["analysis_system"] == "upas"
+                        else (["D1", "H4", "H1"] if form["analysis_system"] == "wave" else (["H4", "H1", "M15"] if form["analysis_system"] == "elliot_wave3" else ["H4", "H1"]))
+                    )
                     multi = fetch_mt5_bridge_data(bridge_timeframes)
                     market_snapshot, chart_snapshot = build_mt5_direct_market_context(multi, form["analysis_system"], form["symbol"])
                     chart_snapshots = chart_snapshot.get("additional_snapshots", [chart_snapshot]) if chart_snapshot else []
-                    if form["analysis_system"] == "upas":
+                    if form["analysis_system"] == "elliot_wave3":
+                        ew3_analysis = analyze_elliot_wave3_from_multi(multi, symbol=form["symbol"], current_price=snapshot_current_price(market_snapshot))
+                        result = ew3_analysis
+                        output = format_elliot_wave3_result(ew3_analysis)
+                        trade_plan = build_elliot_wave3_trade_plan(ew3_analysis)
+                        summary_details = build_elliot_wave3_summary(ew3_analysis)
+                        why_no_trade = build_elliot_wave3_why_no_trade(ew3_analysis)
+                        save_elliot_wave3_history(ew3_analysis, source="mt5", mt5_data_status=build_mt5_data_status([multi["H4"], multi["H1"], multi["M15"]]), market_snapshot=market_snapshot, chart_snapshot=chart_snapshot)
+                    elif form["analysis_system"] == "upas":
                         upas_input = UPASInput(
                             mn1=multi["MN1"],
                             w1=multi["W1"],
@@ -1828,6 +1978,30 @@ def index():
                     create_mt5_request(form["analysis_system"])
                     latest = latest_history("mt5", selected_system)
                     latest_mt5_results = [latest] if latest else []
+            elif form["analysis_system"] == "elliot_wave3":
+                if form["data_source"] == "live":
+                    h4_data, h1_data, m15_data = LiveXAUUSDFeed().fetch_elliot_wave3(form["symbol"])
+                    live_status = build_live_status([h4_data, h1_data, m15_data])
+                    multi = {"H4": h4_data, "H1": h1_data, "M15": m15_data}
+                elif has_ohlc:
+                    multi = DataLoader().load_multi_timeframe_csv_stream(TextIOWrapper(ohlc_file.stream, encoding="utf-8"), form["symbol"])
+                    missing = [tf for tf in ["H4", "H1", "M15"] if tf not in multi]
+                    if missing:
+                        raise ValueError(f"Elliot Wave 3 Analysis OHLC data missing timeframe rows: {', '.join(missing)}")
+                elif has_image:
+                    image_result = ImageInputValidator().validate(BytesIO(image_bytes or b""), chart_image.filename)
+                    multi = {}
+                else:
+                    error = "Elliot Wave 3 Analysis requires one OHLC CSV containing H4, H1, and M15 rows, or live data mode."
+                    multi = {}
+                if multi:
+                    ew3_analysis = analyze_elliot_wave3_from_multi(multi, symbol=form["symbol"])
+                    result = ew3_analysis
+                    output = format_elliot_wave3_result(ew3_analysis)
+                    trade_plan = build_elliot_wave3_trade_plan(ew3_analysis)
+                    summary_details = build_elliot_wave3_summary(ew3_analysis)
+                    why_no_trade = build_elliot_wave3_why_no_trade(ew3_analysis)
+                    save_elliot_wave3_history(ew3_analysis)
             elif form["analysis_system"] == "wave":
                 if form["data_source"] == "live":
                     h4_data, h1_data = LiveXAUUSDFeed().fetch_h4_h1(form["symbol"])
@@ -1942,6 +2116,7 @@ def index():
         checklist_items=checklist_items,
         upas_analysis=upas_analysis,
         wave_analysis=wave_analysis,
+        ew3_analysis=ew3_analysis,
         wave_results=wave_results,
         trade_plan=trade_plan,
         summary_details=summary_details,
@@ -2146,6 +2321,80 @@ def history_detail(item_id: int) -> Response:
                       </div>
                     {% endif %}
                   </div>
+                {% elif item.system_used == "Elliot Wave 3 Analysis" and item.detail %}
+                  <div class="dashboard">
+                    {% if item.detail.market_snapshot %}
+                      <div class="panel">
+                        <h2 class="panel-title">Market Snapshot</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Current Price</span>{{ item.detail.market_snapshot.current_price }}</div>
+                          <div class="metric"><span>Chart Available</span>{{ item.detail.market_snapshot.chart_available }}</div>
+                          <div class="metric"><span>Last Chart Update</span>{{ item.detail.market_snapshot.last_chart_update }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {{ chart_preview_panel(item.detail.chart_snapshots if item.detail.chart_snapshots else ([item.detail.chart_snapshot] if item.detail.chart_snapshot else [])) }}
+                    {% if item.detail.trade_plan and item.detail.trade_plan.action %}
+                      <div class="panel">
+                        <h2 class="panel-title">Trade Plan</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Action</span>{{ item.detail.trade_plan.action }}</div>
+                          <div class="metric"><span>Entry Point</span>{{ item.detail.trade_plan.entry_point }}</div>
+                          <div class="metric"><span>Take Profit</span>{{ item.detail.trade_plan.take_profit }}</div>
+                          <div class="metric"><span>Stop Loss</span>{{ item.detail.trade_plan.stop_loss }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    {% if item.detail.mt5_data_status %}
+                      <div class="panel">
+                        <h2 class="panel-title">MT5 Data Status</h2>
+                        <div class="grid">
+                          <div class="metric"><span>Provider</span>{{ item.detail.mt5_data_status.provider }}</div>
+                          <div class="metric"><span>Status</span>{{ item.detail.mt5_data_status.status }}</div>
+                          <div class="metric"><span>Total Candle</span>{{ item.detail.mt5_data_status.total_candles }}</div>
+                          <div class="metric"><span>Volume Data</span>{{ item.detail.mt5_data_status.volume_data }}</div>
+                        </div>
+                      </div>
+                    {% endif %}
+                    <div class="panel">
+                      <h2 class="panel-title">Elliot Wave 3 Analysis Result</h2>
+                      <div class="grid">
+                        <div class="metric"><span>Symbol</span>{{ item.detail.symbol }}</div>
+                        <div class="metric"><span>Direction</span>{{ item.detail.direction|clean_status }}</div>
+                        <div class="metric"><span>Score</span>{{ item.detail.score }}/100</div>
+                        <div class="metric"><span>Rating</span>{{ item.detail.rating }}</div>
+                        <div class="metric"><span>Wave 1 Origin</span>{{ item.detail.wave1_origin if item.detail.wave1_origin is not none else "None" }}</div>
+                        <div class="metric"><span>Wave 1 End</span>{{ item.detail.wave1_end if item.detail.wave1_end is not none else "None" }}</div>
+                        <div class="metric"><span>Wave 2 Level</span>{{ item.detail.wave2_level if item.detail.wave2_level is not none else "None" }}</div>
+                        <div class="metric"><span>Wave 2 Retracement</span>{{ item.detail.wave2_retracement if item.detail.wave2_retracement is not none else "None" }}%</div>
+                        <div class="metric"><span>Wave 3 Projection</span>{{ item.detail.wave3_projection if item.detail.wave3_projection is not none else "None" }}x</div>
+                        <div class="metric"><span>Impulse ATR</span>{{ item.detail.impulse_atr_multiple if item.detail.impulse_atr_multiple is not none else "None" }}x</div>
+                        <div class="metric"><span>H1 Momentum</span>{{ item.detail.h1_momentum }}</div>
+                        <div class="metric"><span>M15 Trigger</span>{{ item.detail.m15_trigger }}</div>
+                        <div class="metric"><span>Volume Ratio</span>{{ item.detail.volume_ratio if item.detail.volume_ratio is not none else "None" }}x</div>
+                        <div class="metric"><span>Safety</span>Analysis only</div>
+                      </div>
+                    </div>
+                    <div class="panel">
+                      <h2 class="panel-title">Elliot Wave 3 Checklist</h2>
+                      <ul class="checklist">
+                        {% for key, check in item.detail.checklist.items() %}
+                          <li>
+                            <span>{{ key.replace('_', ' ').title() }} - {{ check.reason }}</span>
+                            <span class="pill {{ 'pass' if check.passed else 'fail' }}">{{ 'PASS' if check.passed else 'FAIL' }}</span>
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    </div>
+                    <div class="decision-summary">
+                      <h2>Elliot Wave 3 Decision Summary</h2>
+                      <dl class="summary-list">
+                        {% for row in item.detail.decision_summary %}
+                          <div class="summary-row"><dt>{{ row.label }}</dt><dd>{{ row.value|clean_status }}</dd></div>
+                        {% endfor %}
+                      </dl>
+                    </div>
+                  </div>
                 {% elif item.system_used == "Wave Structure Analyst" and item.detail %}
                   <div class="dashboard">
                     {% if item.detail.market_snapshot %}
@@ -2327,6 +2576,17 @@ def build_upas_trade_plan(upas_analysis: UPASAnalysis) -> dict[str, object] | No
     }
 
 
+def build_elliot_wave3_trade_plan(result: ElliotWave3Result) -> dict[str, object] | None:
+    if not result.is_trade or result.entry is None or result.stop_loss is None or result.take_profit is None:
+        return None
+    return {
+        "action": f"ENTER {result.direction}",
+        "entry_point": result.entry,
+        "take_profit": result.take_profit,
+        "stop_loss": result.stop_loss,
+    }
+
+
 def build_wave_trade_plan(wave: WaveAnalysisResult, current_price: float | None = None) -> dict[str, object] | None:
     direction = wave.trading_bias
     entry = wave.entry_zone
@@ -2434,6 +2694,22 @@ def build_ssa_why_no_trade(snapshot: AnalysisSnapshot) -> list[dict[str, str]]:
     return details
 
 
+def build_elliot_wave3_summary(result: ElliotWave3Result) -> list[dict[str, object]]:
+    return [
+        {"label": "Decision", "value": result.status},
+        {"label": "Setup", "value": result.setup_name},
+        {"label": "Direction", "value": result.direction},
+        {"label": "Score", "value": f"{result.score}/100"},
+        {"label": "Rating", "value": result.rating},
+        {"label": "Wave 2 Retracement", "value": f"{result.wave2_retracement}%" if result.wave2_retracement is not None else "None"},
+        {"label": "Wave 3 Projection", "value": f"{result.wave3_projection}x" if result.wave3_projection is not None else "None"},
+        {"label": "Impulse ATR", "value": f"{result.impulse_atr_multiple}x" if result.impulse_atr_multiple is not None else "None"},
+        {"label": "Volume Ratio", "value": f"{result.volume_ratio}x" if result.volume_ratio is not None else "None"},
+        {"label": "Risk Reward", "value": f"1:{result.risk_reward}"},
+        {"label": "Summary", "value": result.summary},
+    ]
+
+
 def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]:
     payload = upas_analysis.payload
     if payload["status"] == "VALID_TRADE":
@@ -2446,6 +2722,29 @@ def build_upas_why_no_trade(upas_analysis: UPASAnalysis) -> list[dict[str, str]]
     if payload["reasoning"]:
         details.append({"title": "Next Requirement", "detail": payload["reasoning"]})
     return details
+
+
+def build_elliot_wave3_why_no_trade(result: ElliotWave3Result) -> list[dict[str, str]]:
+    if result.is_trade:
+        return []
+    return [{"title": "Failed Rule", "detail": rule} for rule in result.failed_rules]
+
+
+def analyze_elliot_wave3_from_multi(
+    multi: dict[str, object],
+    symbol: str = "XAUUSD",
+    current_price: float | None = None,
+) -> ElliotWave3Result:
+    missing = [tf for tf in ["H4", "H1", "M15"] if tf not in multi]
+    if missing:
+        raise ValueError(f"Elliot Wave 3 Analysis requires H4, H1, and M15 OHLC rows. Missing: {', '.join(missing)}")
+    return ElliotWave3Analyzer().analyze(
+        symbol=symbol,
+        h4=multi["H4"],
+        h1=multi["H1"],
+        m15=multi["M15"],
+        current_price=current_price,
+    )
 
 
 def analyze_wave_results_from_multi(
@@ -2588,6 +2887,79 @@ def format_wave_result(wave: WaveAnalysisResult) -> str:
     )
 
 
+def format_elliot_wave3_result(result: ElliotWave3Result) -> str:
+    return (
+        "Elliot Wave 3 Analysis Result\n\n"
+        f"Symbol:\n{result.symbol}\n\n"
+        f"Status:\n{result.status}\n\n"
+        f"Direction:\n{result.direction}\n\n"
+        f"Setup:\n{result.setup_name}\n\n"
+        f"Score:\n{result.score}/100\n\n"
+        f"Rating:\n{result.rating}\n\n"
+        f"Wave 2 Retracement:\n{result.wave2_retracement if result.wave2_retracement is not None else 'None'}%\n\n"
+        f"Wave 3 Projection:\n{result.wave3_projection if result.wave3_projection is not None else 'None'}x\n\n"
+        f"ATR Impulse:\n{result.impulse_atr_multiple if result.impulse_atr_multiple is not None else 'None'}x\n\n"
+        f"H1 Momentum:\n{result.h1_momentum}\n\n"
+        f"M15 Trigger:\n{result.m15_trigger}\n\n"
+        f"Volume Ratio:\n{result.volume_ratio if result.volume_ratio is not None else 'None'}x\n\n"
+        f"Summary:\n{result.summary}"
+    )
+
+
+def save_elliot_wave3_history(
+    result: ElliotWave3Result,
+    source: str = "web",
+    mt5_data_status: dict[str, object] | None = None,
+    market_snapshot: dict[str, object] | None = None,
+    chart_snapshot: dict[str, object] | None = None,
+) -> None:
+    trade_plan = build_elliot_wave3_trade_plan(result)
+    detail = {
+        "symbol": result.symbol,
+        "status": result.status,
+        "direction": result.direction,
+        "setup_name": result.setup_name,
+        "score": result.score,
+        "rating": result.rating,
+        "trend": result.trend,
+        "wave1_origin": result.wave1_origin,
+        "wave1_end": result.wave1_end,
+        "wave2_level": result.wave2_level,
+        "wave2_retracement": result.wave2_retracement,
+        "wave3_projection": result.wave3_projection,
+        "atr_value": result.atr_value,
+        "impulse_atr_multiple": result.impulse_atr_multiple,
+        "h1_momentum": result.h1_momentum,
+        "m15_trigger": result.m15_trigger,
+        "volume_ratio": result.volume_ratio,
+        "entry": result.entry,
+        "stop_loss": result.stop_loss,
+        "take_profit": result.take_profit,
+        "risk_reward": result.risk_reward,
+        "checklist": result.checklist,
+        "failed_rules": result.failed_rules,
+        "trade_plan": trade_plan,
+        "decision_summary": build_elliot_wave3_summary(result),
+    }
+    if mt5_data_status:
+        detail["mt5_data_status"] = mt5_data_status
+    if market_snapshot:
+        detail["market_snapshot"] = market_snapshot
+    if chart_snapshot:
+        detail["chart_snapshot"] = chart_snapshot
+        detail["chart_snapshots"] = chart_snapshot.get("additional_snapshots", [chart_snapshot])
+    add_history(
+        "Elliot Wave 3 Analysis",
+        result.status,
+        result.setup_name,
+        f"{result.score}/100",
+        result.summary,
+        source=source,
+        detail=detail,
+        raw_output=format_elliot_wave3_result(result),
+    )
+
+
 def save_wave_history(
     wave: WaveAnalysisResult,
     source: str = "web",
@@ -2651,6 +3023,8 @@ def save_wave_history(
 
 
 def display_system_name(value: str) -> str:
+    if value == "elliot_wave3":
+        return "Elliot Wave 3 Analysis"
     if value == "upas":
         return "UPAS Trade Assistant"
     if value == "wave":

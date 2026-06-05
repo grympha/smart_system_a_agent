@@ -9,6 +9,7 @@ import web_app as web_module
 from web_app import app, build_live_status, clean_status
 from tests.conftest import _bullish_h1, _bullish_h4
 from tests.test_upas_agent import h1_confirmation, h4_last_kiss, trend_data
+from templates import elliot_wave3_template_csv
 from wave_structure import WaveAnalysisResult
 
 
@@ -26,6 +27,8 @@ def test_home_page_loads() -> None:
     assert b"UPAS CSV Template" in response.data
     assert b"Wave Structure Analyst" in response.data
     assert b"Wave CSV Template" in response.data
+    assert b"Elliot Wave 3 Analysis" in response.data
+    assert b"Elliot Wave 3 CSV Template" in response.data
     assert b"Wave Result View" not in response.data
 
 
@@ -242,6 +245,48 @@ def test_template_downloads() -> None:
     assert b"MN1" in upas.data
     assert b"W1" in upas.data
     assert b"D1" in upas.data
+    ew3 = client.get("/templates/elliot-wave3.csv")
+    assert ew3.status_code == 200
+    assert b"H4" in ew3.data
+    assert b"H1" in ew3.data
+    assert b"M15" in ew3.data
+
+
+def test_api_analyze_accepts_elliot_wave3_csv() -> None:
+    client = app.test_client()
+    response = client.post(
+        "/api/analyze",
+        json={"analysis_system": "elliot_wave3", "symbol": "XAUUSD", "ohlc_csv": elliot_wave3_template_csv()},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["analysis_system"] == "Elliot Wave 3 Analysis"
+    assert payload["status"] == "VALID_TRADE"
+    assert payload["result"]["score"] >= 85
+    assert payload["trade_plan"]["action"] == "ENTER BUY"
+    assert payload["safety"] == "Analysis only. No trade execution."
+
+
+def test_elliot_wave3_csv_upload_renders_dashboard() -> None:
+    client = app.test_client()
+    response = client.post(
+        "/",
+        data={
+            "analysis_system": "elliot_wave3",
+            "data_source": "csv",
+            "ohlc_data": (BytesIO(elliot_wave3_template_csv().encode("utf-8")), "ew3.csv"),
+            "symbol": "XAUUSD",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    assert b"Elliot Wave 3 Analysis" in response.data
+    assert b"Elliot Wave 3 Checklist" in response.data
+    assert b"Trade Plan" in response.data
+    assert b"Risk Reward" in response.data
 
 
 def test_api_analyze_accepts_mt5_ohlc_csv() -> None:

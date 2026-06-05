@@ -70,6 +70,7 @@ class TwelveDataClient:
             "1day": "D1",
             "4h": "H4",
             "1h": "H1",
+            "15min": "M15",
         }
         timeframe = timeframe_map.get(interval, interval)
         return OHLCVData(candles=candles, timeframe=timeframe, symbol=symbol)
@@ -91,3 +92,9 @@ class LiveXAUUSDFeed:
         h4 = self.client.fetch_ohlcv(symbol, "4h", outputsize)
         h1 = self.client.fetch_ohlcv(symbol, "1h", outputsize)
         return mn1, w1, d1, h4, h1
+
+    def fetch_elliot_wave3(self, symbol: str = "XAU/USD", outputsize: int = 120) -> tuple[OHLCVData, OHLCVData, OHLCVData]:
+        h4 = self.client.fetch_ohlcv(symbol, "4h", outputsize)
+        h1 = self.client.fetch_ohlcv(symbol, "1h", outputsize)
+        m15 = self.client.fetch_ohlcv(symbol, "15min", outputsize)
+        return h4, h1, m15

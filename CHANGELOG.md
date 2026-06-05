@@ -2,6 +2,22 @@
 
 All notable project changes should be recorded here.
 
+## 2026-06-06
+
+### Added
+
+- Added Elliot Wave 3 Analysis as a fourth analysis system.
+- Added strict XAUUSD Wave 3 continuation rules from the strategy PDF:
+  - H4 Wave 1/Wave 2/Wave 3 structure
+  - H1 momentum confirmation
+  - M15 trigger and volume confirmation
+  - Wave 2 Fibonacci retracement
+  - Wave 3 projection
+  - H4 ATR impulse filter
+  - 85/100 minimum score
+  - 1:3 analysis-only trade plan
+- Added M15 support for live data, CSV template, API analysis, MT5 Direct Mode, and MT5 bridge candle retrieval.
+
 ## 2026-06-04
 
 ### Added

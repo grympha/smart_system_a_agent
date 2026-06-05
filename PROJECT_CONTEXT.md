@@ -47,6 +47,7 @@ Core files:
 - `smart_system_a/` - Smart System A analyzers, models, risk, checklist, output.
 - `upas/` - UPAS Trade Assistant logic.
 - `wave_structure/` - Wave Structure Analyst logic.
+- `elliot_wave3/` - Strict XAUUSD Elliot Wave 3 continuation analyzer.
 - `mt5_bridge.py` - Local read-only Python Flask API that connects to MetaTrader 5 desktop.
 - `mt5/` - MetaTrader 5 EA/script files.
 - `tests/` - Unit tests for all current engines.
@@ -121,6 +122,30 @@ Main logic:
 
 Manual wave input fields were removed. The result should be inferred from OHLCV data.
 
+### Elliot Wave 3 Analysis
+
+Required timeframes:
+
+```text
+H4, H1, M15
+```
+
+Main logic:
+
+- XAUUSD only
+- Wave 3 continuation after valid Wave 2 pullback only
+- H4 trend, Wave 1 impulse, Wave 2 pullback, and Wave 3 breakout
+- Wave 2 retracement must be 38.2% - 61.8%; 55% - 61.8% is preferred
+- Wave 3 projection must be at least 1.272x Wave 1
+- H1 momentum confirmation
+- M15 trigger confirmation
+- M15 volume must be at least 1.20x average volume
+- Wave 1 impulse must be at least 1.20x H4 ATR
+- Score is out of 100; only score >= 85 is tradeable
+- Valid trade plan uses SL at Wave 2 invalidation and TP at 1:3 R:R
+
+This module is analysis-only and does not execute trades.
+
 ## Web App Behavior
 
 The sidebar has:
@@ -167,7 +192,7 @@ History rows should be clickable and show the full dashboard result, not raw JSO
 
 The UI should remain mobile friendly, dark themed, and premium-looking.
 
-Hourly monitoring runs through `/api/auto-analysis/hourly`. While the page is open, the browser calls it every hour and can show a browser notification when Smart System A or UPAS returns `VALID_TRADE`, or Wave Structure Analyst returns `WAVE_CONFIRMED`. Browser notifications require the user to click `Enable Hourly Alerts` and allow notifications.
+Hourly monitoring runs through `/api/auto-analysis/hourly`. While the page is open, the browser calls it every hour and can show a browser notification when Smart System A, UPAS, or Elliot Wave 3 Analysis returns `VALID_TRADE`, or Wave Structure Analyst returns `WAVE_CONFIRMED`. Browser notifications require the user to click `Enable Hourly Alerts` and allow notifications.
 
 Telegram notifications are also supported. When `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured, the hourly endpoint sends a Telegram message for each alert result. Use `POST /api/notifications/telegram/test` to verify the server can send Telegram messages.
 
@@ -261,13 +286,7 @@ Use:
 python -m pytest
 ```
 
-Expected current test count after Wave Structure Analyst work:
-
-```text
-37 passed
-```
-
-If the number changes because new tests are added, update this file.
+The exact test count can change as systems are added. A clean local run should pass without failures.
 
 ## Security Notes
 

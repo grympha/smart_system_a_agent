@@ -13,7 +13,7 @@ except Exception:  # pragma: no cover - fallback for minimal installs
 
 
 SYMBOL = "XAUUSD"
-SUPPORTED_TIMEFRAMES = {"MN1", "W1", "D1", "H4", "H1"}
+SUPPORTED_TIMEFRAMES = {"MN1", "W1", "D1", "H4", "H1", "M15"}
 
 
 def create_bridge_app() -> Flask:
@@ -100,7 +100,7 @@ def create_bridge_app() -> Flask:
         timeframe_name = request.args.get("timeframe", "H1").upper()
         limit_raw = request.args.get("limit", "100")
         if timeframe_name not in SUPPORTED_TIMEFRAMES:
-            return jsonify_error("Unsupported timeframe. Use MN1, W1, D1, H4, or H1.", 400)
+            return jsonify_error("Unsupported timeframe. Use MN1, W1, D1, H4, H1, or M15.", 400)
         try:
             limit = int(limit_raw)
         except ValueError:
@@ -214,6 +214,7 @@ def _timeframe_value(mt5: Any, timeframe_name: str) -> Any:
         "D1": mt5.TIMEFRAME_D1,
         "H4": mt5.TIMEFRAME_H4,
         "H1": mt5.TIMEFRAME_H1,
+        "M15": mt5.TIMEFRAME_M15,
     }[timeframe_name]
 
 

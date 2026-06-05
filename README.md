@@ -7,6 +7,7 @@ Current analysis systems:
 - Smart System A
 - UPAS Trade Assistant
 - Wave Structure Analyst
+- Elliot Wave 3 Analysis
 
 Hosted app:
 
@@ -114,7 +115,30 @@ Optional context:
 D1, M30, M15
 ```
 
-When both H4 and H1 rows are present, the app can calculate both Wave Structure results and let the dashboard show the relevant timeframe result. The sidebar no longer asks for manual wave levels; the module infers price, swings, breakout, retest, and trend from OHLCV data.
+When both H4 and H1 rows are present, the dashboard shows both Wave Structure results. The sidebar no longer asks for manual wave levels; the module infers price, swings, breakout, retest, and trend from OHLCV data.
+
+### Elliot Wave 3 Analysis
+
+Elliot Wave 3 Analysis is a strict XAUUSD Wave 3 continuation system based on the attached V6 strategy research. It trades no other Elliott Wave pattern.
+
+It checks:
+
+- H4 Wave 1 impulse, Wave 2 pullback, and Wave 3 breakout structure
+- Wave 2 Fibonacci retracement from 38.2% to 61.8%, with 55% to 61.8% preferred
+- Wave 3 projection of at least 1.272x Wave 1
+- H4 ATR impulse filter
+- H1 momentum confirmation
+- M15 entry trigger and M15 volume expansion
+- Minimum setup score of 85/100
+- 1:3 risk reward trade plan when valid
+
+Required OHLC timeframes:
+
+```text
+H4, H1, M15
+```
+
+The system remains analysis-only. It never opens, closes, or modifies trades.
 
 ## OHLC CSV Format
 
@@ -202,6 +226,7 @@ Gold Smart Agent can send Telegram alerts when hourly MT5 auto-analysis finds:
 - Smart System A `VALID_TRADE`
 - UPAS `VALID_TRADE`
 - Wave Structure Analyst `WAVE_CONFIRMED`
+- Elliot Wave 3 Analysis `VALID_TRADE`
 
 Set these environment variables on Render:
 
@@ -240,6 +265,7 @@ GET /api/mt5/status
 GET /api/mt5/account
 GET /api/mt5/xauusd/candles?timeframe=H1&limit=100
 GET /api/mt5/xauusd/candles?timeframe=H4&limit=100
+GET /api/mt5/xauusd/candles?timeframe=M15&limit=100
 ```
 
 Required request header:
@@ -274,6 +300,7 @@ The EA can push all three analysis systems:
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
 - Wave Structure Analyst: H4 and H1
+- Elliot Wave 3 Analysis: H4, H1, and M15
 
 The EA payload can also include screenshot metadata for future image-AI modules:
 
