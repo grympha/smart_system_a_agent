@@ -287,6 +287,7 @@ def test_elliot_wave3_csv_upload_renders_dashboard() -> None:
     assert b"Elliot Wave 3 Checklist" in response.data
     assert b"Trade Plan" in response.data
     assert b"Risk Reward" in response.data
+    assert b"Elliot Wave 3 Analysis Result\\n\\nSymbol:" not in response.data
 
 
 def test_api_analyze_accepts_mt5_ohlc_csv() -> None:

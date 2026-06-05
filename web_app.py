@@ -1218,7 +1218,7 @@ PAGE = """
               <summary>View raw analysis output</summary>
               <pre>{{ output }}</pre>
             </details>
-          {% else %}
+          {% elif output and not ew3_analysis %}
             <pre>{{ output }}</pre>
           {% endif %}
         </div>
