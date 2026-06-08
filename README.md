@@ -263,9 +263,9 @@ Bridge endpoints:
 ```text
 GET /api/mt5/status
 GET /api/mt5/account
-GET /api/mt5/xauusd/candles?timeframe=H1&limit=100
-GET /api/mt5/xauusd/candles?timeframe=H4&limit=100
-GET /api/mt5/xauusd/candles?timeframe=M15&limit=100
+GET /api/mt5/xauusd/candles?timeframe=H1&limit=300
+GET /api/mt5/xauusd/candles?timeframe=H4&limit=300
+GET /api/mt5/xauusd/candles?timeframe=M15&limit=300
 ```
 
 Required request header:
@@ -295,6 +295,12 @@ Default interval:
 
 ```text
 InpPushIntervalSeconds = 300
+```
+
+Default OHLCV depth:
+
+```text
+InpBarsPerTimeframe = 300
 ```
 
 The V4 EA can push these analysis systems:

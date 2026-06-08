@@ -277,6 +277,7 @@ C:\Users\User\AppData\Roaming\MetaQuotes\Terminal\5FFA568149E88FCD5B44D926DCFEAA
 Current V4 behavior:
 
 - Auto-pushes every 5 minutes by default with `InpPushIntervalSeconds = 300`.
+- Pushes 300 OHLCV candles per timeframe by default with `InpBarsPerTimeframe = 300`.
 - Pushes on EA start when `InpPushOnStart = true`.
 - Default endpoint is `https://smart-system-a-agent.onrender.com/api/analyze`.
 - Pushes Smart System A with H4 and H1 rows.
@@ -285,6 +286,8 @@ Current V4 behavior:
 - Pushes Elliot Wave 3 Analysis with H4, H1, and M15 rows.
 - Captures and sends both H1 and H4 chart previews under the `chart_images` payload.
 - Keeps the legacy single `chart_image` field as a fallback, preferring H1 when available.
+
+MT5 Direct Mode also requests 300 OHLCV candles per timeframe by default from the local bridge.
 
 V3 remains available as the last backup EA before Elliot Wave 3 auto-push support.
 

@@ -3335,7 +3335,7 @@ def mt5_bridge_configured() -> bool:
     return bool(os.getenv("MT5_BRIDGE_URL") and os.getenv("MT5_BRIDGE_API_KEY"))
 
 
-def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 200) -> dict[str, object]:
+def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 300) -> dict[str, object]:
     base_url = (os.getenv("MT5_BRIDGE_URL") or "").rstrip("/")
     api_key = os.getenv("MT5_BRIDGE_API_KEY") or ""
     if not base_url or not api_key:

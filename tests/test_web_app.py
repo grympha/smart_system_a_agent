@@ -164,7 +164,7 @@ def test_upas_selector_renders_upas_dashboard() -> None:
 
 
 def test_mt5_direct_mode_renders_market_snapshot_and_latest_chart(monkeypatch) -> None:
-    def fake_multi(timeframes: list[str], limit: int = 200) -> dict[str, object]:
+    def fake_multi(timeframes: list[str], limit: int = 300) -> dict[str, object]:
         return {
             "MN1": trend_data("MN1"),
             "W1": trend_data("W1"),

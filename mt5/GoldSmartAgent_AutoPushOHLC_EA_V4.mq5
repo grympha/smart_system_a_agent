@@ -8,7 +8,7 @@
 input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
 input string InpSymbol = "";            // blank = current chart symbol
 input string InpChartTimeframeLabel = "H1";
-input int    InpBarsPerTimeframe = 120;
+input int    InpBarsPerTimeframe = 300;
 input int    InpPushIntervalSeconds = 300;
 input int    InpTimeoutMs = 15000;
 input bool   InpPushOnStart = true;
