@@ -406,22 +406,40 @@ PAGE = """
     }
     .chart-preview-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 14px;
     }
     .chart-preview-card {
+      display: grid;
+      gap: 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px;
       background: #0f1726;
+      min-width: 0;
     }
     .chart-preview-card h3 {
-      margin: 0 0 8px;
+      margin: 0;
       font-size: 13px;
       color: var(--accent);
     }
     .chart-preview-card .image-preview {
-      max-height: 280px;
+      height: 100%;
+      max-height: none;
+      aspect-ratio: 16 / 9;
+    }
+    .chart-preview-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0;
+    }
+    .chart-preview-meta .metric {
+      min-height: 58px;
+      margin: 0;
+    }
+    .chart-preview-meta .metric:last-child {
+      white-space: nowrap;
     }
     .chart-preview-trigger {
       width: 100%;
@@ -432,6 +450,7 @@ PAGE = """
       color: inherit;
       cursor: zoom-in;
       display: block;
+      overflow: hidden;
     }
     .chart-modal {
       position: fixed;
@@ -655,7 +674,7 @@ PAGE = """
               <button type="button" class="chart-preview-trigger" data-chart-url="{{ chart.image_url }}" data-chart-title="{{ chart.symbol }} {{ chart.metadata.timeframe or 'Chart' }} - {{ chart.market_timestamp }}">
                 <img class="image-preview" src="{{ chart.image_url }}" alt="{{ chart.metadata.timeframe or 'Chart' }} chart screenshot preview">
               </button>
-              <div class="grid">
+              <div class="chart-preview-meta">
                 <div class="metric"><span>Symbol</span>{{ chart.symbol }}</div>
                 <div class="metric"><span>Timeframe</span>{{ chart.metadata.timeframe or "n/a" }}</div>
                 <div class="metric"><span>Timestamp</span>{{ chart.market_timestamp }}</div>
@@ -2176,7 +2195,7 @@ def history_detail(item_id: int) -> Response:
                       <button type="button" class="chart-preview-trigger" data-chart-url="{{ chart.image_url }}" data-chart-title="{{ chart.symbol }} {{ chart.metadata.timeframe or 'Chart' }} - {{ chart.market_timestamp }}">
                         <img class="image-preview" src="{{ chart.image_url }}" alt="{{ chart.metadata.timeframe or 'Chart' }} chart screenshot preview">
                       </button>
-                      <div class="grid">
+                      <div class="chart-preview-meta">
                         <div class="metric"><span>Symbol</span>{{ chart.symbol }}</div>
                         <div class="metric"><span>Timeframe</span>{{ chart.metadata.timeframe or "n/a" }}</div>
                         <div class="metric"><span>Timestamp</span>{{ chart.market_timestamp }}</div>
