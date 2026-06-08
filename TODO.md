@@ -46,6 +46,7 @@ This file tracks practical next steps for Gold Smart Agent.
 
 - Package the MT5 bridge startup flow into a simpler Windows guide.
 - Compile and test `mt5/GoldSmartAgent_AutoPushOHLC_EA_V4.mq5` inside MetaEditor on the active MT5 terminal.
+- Confirm both H1 and H4 MT5 screenshots appear in the hosted dashboard after the V4 EA push cycle.
 - Add health-check script for:
   - MT5 open
   - MT5 logged in

@@ -283,7 +283,8 @@ Current V4 behavior:
 - Pushes UPAS with MN1, W1, D1, H4, and H1 rows.
 - Pushes Wave Structure Analyst with D1, H4, and H1 rows.
 - Pushes Elliot Wave 3 Analysis with H4, H1, and M15 rows.
-- Includes current chart screenshot metadata and base64 PNG payload.
+- Captures and sends both H1 and H4 chart previews under the `chart_images` payload.
+- Keeps the legacy single `chart_image` field as a fallback, preferring H1 when available.
 
 V3 remains available as the last backup EA before Elliot Wave 3 auto-push support.
 

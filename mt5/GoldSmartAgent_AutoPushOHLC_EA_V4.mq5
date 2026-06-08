@@ -19,6 +19,10 @@ int      g_push_count = 0;
 string   g_csv = "";
 string   g_chart_image_base64 = "";
 string   g_chart_filename = "";
+string   g_chart_image_h1_base64 = "";
+string   g_chart_image_h4_base64 = "";
+string   g_chart_filename_h1 = "";
+string   g_chart_filename_h4 = "";
 string   g_market_timestamp = "";
 double   g_current_price = 0.0;
 
@@ -126,6 +130,114 @@ bool CaptureChartScreenshot(string symbol)
    g_chart_image_base64 = CharArrayToString(encoded, 0, encoded_size, CP_UTF8);
    Print("Gold Smart Agent: screenshot captured: MQL5\\Files\\", relative_path, " bytes=", size);
    return true;
+}
+
+bool ReadScreenshotBase64(string relative_path, string &image_base64)
+{
+   image_base64 = "";
+   int handle = FileOpen(relative_path, FILE_READ | FILE_BIN);
+   if(handle == INVALID_HANDLE)
+   {
+      Print("Gold Smart Agent: screenshot file open failed. Error: ", GetLastError(), " path=", relative_path);
+      return false;
+   }
+
+   int size = (int)FileSize(handle);
+   uchar bytes[];
+   ArrayResize(bytes, size);
+   FileReadArray(handle, bytes, 0, size);
+   FileClose(handle);
+
+   uchar key[];
+   uchar encoded[];
+   ResetLastError();
+   int encoded_size = CryptEncode(CRYPT_BASE64, bytes, key, encoded);
+   if(encoded_size <= 0)
+   {
+      Print("Gold Smart Agent: screenshot base64 encode failed. Error: ", GetLastError());
+      return false;
+   }
+
+   image_base64 = CharArrayToString(encoded, 0, encoded_size, CP_UTF8);
+   Print("Gold Smart Agent: screenshot encoded: MQL5\\Files\\", relative_path, " bytes=", size);
+   return true;
+}
+
+bool CaptureTimeframeScreenshot(string symbol, ENUM_TIMEFRAMES timeframe, string &image_base64, string &filename)
+{
+   image_base64 = "";
+   filename = "";
+
+   string folder = "GoldSmartAgent";
+   FolderCreate(folder);
+
+   string timeframe_label = TimeframeName(timeframe);
+   datetime now = TimeCurrent();
+   filename = symbol + "_" + timeframe_label + "_" + CompactTimestamp(now) + ".png";
+   string relative_path = folder + "\\" + filename;
+
+   long chart_id = 0;
+   bool temporary_chart = false;
+   if(_Symbol == symbol && _Period == timeframe)
+   {
+      chart_id = ChartID();
+   }
+   else
+   {
+      ResetLastError();
+      chart_id = ChartOpen(symbol, timeframe);
+      if(chart_id <= 0)
+      {
+         Print("Gold Smart Agent: failed to open ", timeframe_label, " chart for screenshot. Error: ", GetLastError());
+         return false;
+      }
+      temporary_chart = true;
+      Sleep(1500);
+   }
+
+   ChartRedraw(chart_id);
+   Sleep(500);
+   ResetLastError();
+   if(!ChartScreenShot(chart_id, relative_path, 1280, 720, ALIGN_RIGHT))
+   {
+      Print("Gold Smart Agent: ", timeframe_label, " screenshot capture failed. Error: ", GetLastError());
+      if(temporary_chart)
+         ChartClose(chart_id);
+      return false;
+   }
+
+   bool encoded_ok = ReadScreenshotBase64(relative_path, image_base64);
+   if(temporary_chart)
+      ChartClose(chart_id);
+
+   if(encoded_ok)
+      Print("Gold Smart Agent: ", timeframe_label, " screenshot captured: ", filename);
+   return encoded_ok;
+}
+
+bool CaptureH1H4ChartScreenshots(string symbol)
+{
+   g_chart_image_h1_base64 = "";
+   g_chart_image_h4_base64 = "";
+   g_chart_filename_h1 = "";
+   g_chart_filename_h4 = "";
+
+   bool h1_ok = CaptureTimeframeScreenshot(symbol, PERIOD_H1, g_chart_image_h1_base64, g_chart_filename_h1);
+   bool h4_ok = CaptureTimeframeScreenshot(symbol, PERIOD_H4, g_chart_image_h4_base64, g_chart_filename_h4);
+
+   if(h1_ok)
+   {
+      g_chart_image_base64 = g_chart_image_h1_base64;
+      g_chart_filename = g_chart_filename_h1;
+   }
+   else if(h4_ok)
+   {
+      g_chart_image_base64 = g_chart_image_h4_base64;
+      g_chart_filename = g_chart_filename_h4;
+   }
+
+   Print("Gold Smart Agent: H1/H4 screenshot status. H1=", h1_ok, " H4=", h4_ok);
+   return (h1_ok || h4_ok);
 }
 
 bool AppendRates(string symbol, ENUM_TIMEFRAMES timeframe, int bars)
@@ -256,6 +368,14 @@ bool PushAnalysis(string symbol, string analysis_system)
    body += quote + "chart_filename" + quote + ":" + quote + EscapeJson(g_chart_filename) + quote + ",";
    body += quote + "chart_mime_type" + quote + ":" + quote + "image/png" + quote + ",";
    body += quote + "chart_image" + quote + ":" + quote + EscapeJson(g_chart_image_base64) + quote + ",";
+   body += quote + "chart_images" + quote + ":{";
+   body += quote + "H1" + quote + ":" + quote + EscapeJson(g_chart_image_h1_base64) + quote + ",";
+   body += quote + "H4" + quote + ":" + quote + EscapeJson(g_chart_image_h4_base64) + quote;
+   body += "},";
+   body += quote + "chart_filenames" + quote + ":{";
+   body += quote + "H1" + quote + ":" + quote + EscapeJson(g_chart_filename_h1) + quote + ",";
+   body += quote + "H4" + quote + ":" + quote + EscapeJson(g_chart_filename_h4) + quote;
+   body += "},";
    body += quote + "ohlc_csv" + quote + ":" + quote + EscapeJson(g_csv) + quote;
    body += "}";
 
@@ -325,8 +445,10 @@ void PushBothSystems()
 
    g_market_timestamp = IsoTimestamp(TimeCurrent());
    g_current_price = CaptureCurrentPrice(symbol);
-   bool screenshot_ok = CaptureChartScreenshot(symbol);
-   Print("Gold Smart Agent: batch screenshot status: ", screenshot_ok);
+   bool screenshot_ok = CaptureH1H4ChartScreenshots(symbol);
+   if(!screenshot_ok)
+      screenshot_ok = CaptureChartScreenshot(symbol);
+   Print("Gold Smart Agent: batch H1/H4 screenshot status: ", screenshot_ok);
 
    if(InpPingBeforePush)
       PingServer();

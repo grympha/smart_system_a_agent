@@ -10,6 +10,7 @@ All notable project changes should be recorded here.
   - `mt5/GoldSmartAgent_AutoPushOHLC_EA_V3.mq5`
 - Added MT5 auto-push EA V4 with Elliot Wave 3 support:
   - `mt5/GoldSmartAgent_AutoPushOHLC_EA_V4.mq5`
+- Added H1 and H4 chart preview capture to MT5 auto-push EA V4.
 
 ### Changed
 
@@ -22,6 +23,7 @@ All notable project changes should be recorded here.
   - UPAS: MN1, W1, D1, H4, and H1
   - Wave Structure Analyst: D1, H4, and H1
   - Elliot Wave 3 Analysis: H4, H1, and M15
+- V4 now sends chart previews through the `chart_images` payload with separate `H1` and `H4` screenshots.
 
 ## 2026-06-06
 

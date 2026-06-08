@@ -308,8 +308,9 @@ V3 remains committed as a backup EA for SSA, UPAS, and Wave Structure only. Use 
 
 The EA payload can also include screenshot metadata for future image-AI modules:
 
-- screenshot filename such as `XAUUSD_H1_20260601_153000.png`
-- base64 PNG screenshot in the JSON payload
+- H1 screenshot filename such as `XAUUSD_H1_20260601_153000.png`
+- H4 screenshot filename such as `XAUUSD_H4_20260601_153000.png`
+- base64 PNG screenshots in the JSON payload under `chart_images`
 
 Image-AI modules such as Elliott Wave recognition, SNR detection, trendline detection, breakout detection, candlestick pattern detection, and price-action validation are not active yet.
 
