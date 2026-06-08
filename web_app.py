@@ -3050,7 +3050,7 @@ def build_market_snapshot(
         "timestamp": timestamp or malaysia_now_text(),
         "chart_available": "Yes" if chart_count else "No",
         "chart_count": chart_count,
-        "last_chart_update": chart_snapshot["market_timestamp"] if chart_snapshot else (timestamp or "n/a"),
+        "last_chart_update": chart_snapshot.get("created_at") if chart_snapshot else (timestamp or "n/a"),
         "chart_url": chart_snapshot.get("image_url") if chart_snapshot else None,
         "chart_symbol": chart_snapshot.get("symbol") if chart_snapshot else None,
         "chart_timeframe": (chart_snapshot.get("metadata") or {}).get("timeframe") if chart_snapshot else None,
@@ -3078,7 +3078,7 @@ def build_mt5_direct_market_context(
     chart_snapshots = latest_chart_screenshots(symbol, display_name, ["H1", "H4"])
     if not chart_snapshots and normalized_symbol != symbol:
         chart_snapshots = latest_chart_screenshots(normalized_symbol, display_name, ["H1", "H4"])
-    if not chart_snapshots:
+    if not chart_snapshots or should_generate_fresh_chart_pair(chart_snapshots):
         chart_snapshots = generated_chart_snapshots_from_multi(multi, display_name, normalized_symbol)
     chart_snapshot = preferred_chart_snapshot(chart_snapshots) if chart_snapshots else latest_chart_screenshot(symbol, display_name)
     if chart_snapshot:
@@ -3086,6 +3086,15 @@ def build_mt5_direct_market_context(
         chart_snapshot["image_url"] = f"/screenshots/{chart_snapshot['id']}"
         chart_snapshot = with_additional_chart_snapshots(chart_snapshot, chart_snapshots or [chart_snapshot])
     return build_market_snapshot(current_price, str(timestamp or malaysia_now_text()), chart_snapshot), chart_snapshot
+
+
+def should_generate_fresh_chart_pair(chart_snapshots: list[dict[str, object]]) -> bool:
+    timeframes = {str((snapshot.get("metadata") or {}).get("timeframe") or "").upper() for snapshot in chart_snapshots}
+    if not {"H1", "H4"}.issubset(timeframes):
+        return True
+
+    sources = {str(snapshot.get("image_source") or "") for snapshot in chart_snapshots}
+    return "generated_ohlcv" in sources and len(sources) > 1
 
 
 def generated_chart_snapshots_from_multi(

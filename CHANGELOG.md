@@ -24,6 +24,8 @@ All notable project changes should be recorded here.
   - Wave Structure Analyst: D1, H4, and H1
   - Elliot Wave 3 Analysis: H4, H1, and M15
 - V4 now sends chart previews through the `chart_images` payload with separate `H1` and `H4` screenshots.
+- MT5 Direct Mode now avoids mixing one real MT5 screenshot with an older generated fallback preview; it regenerates a fresh H1/H4 pair when the stored pair is incomplete or mixed.
+- Market Snapshot `Last Chart Update` now uses the stored Malaysia-time chart receipt time.
 
 ## 2026-06-06
 

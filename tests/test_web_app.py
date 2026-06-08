@@ -204,7 +204,9 @@ def test_mt5_direct_mode_renders_market_snapshot_and_latest_chart(monkeypatch) -
     assert b"Latest Chart Preview" in response.data
     assert b"chart-modal" in response.data
     assert b'target="_blank"' not in response.data
-    assert chart["image_url"].encode() in response.data
+    assert chart["image_url"].encode() not in response.data
+    assert b"H1 Preview" in response.data
+    assert b"H4 Preview" in response.data
 
 
 def test_mt5_direct_mode_generates_h1_h4_chart_previews_from_ohlcv(monkeypatch) -> None:
@@ -229,6 +231,15 @@ def test_mt5_direct_mode_generates_h1_h4_chart_previews_from_ohlcv(monkeypatch) 
     assert b"Latest Chart Preview" in response.data
     assert b"H1 Preview" in response.data
     assert b"H4 Preview" in response.data
+
+
+def test_mt5_direct_mode_regenerates_mixed_chart_preview_pair() -> None:
+    snapshots = [
+        {"metadata": {"timeframe": "H1"}, "image_source": "mt5_api"},
+        {"metadata": {"timeframe": "H4"}, "image_source": "generated_ohlcv"},
+    ]
+
+    assert web_module.should_generate_fresh_chart_pair(snapshots) is True
 
 
 def test_template_downloads() -> None:
