@@ -8,6 +8,8 @@ All notable project changes should be recorded here.
 
 - Added the active MetaTrader 5 auto-push EA V3 source file:
   - `mt5/GoldSmartAgent_AutoPushOHLC_EA_V3.mq5`
+- Added MT5 auto-push EA V4 with Elliot Wave 3 support:
+  - `mt5/GoldSmartAgent_AutoPushOHLC_EA_V4.mq5`
 
 ### Changed
 
@@ -15,7 +17,11 @@ All notable project changes should be recorded here.
   - Smart System A: H4 and H1
   - UPAS: MN1, W1, D1, H4, and H1
   - Wave Structure Analyst: D1, H4, and H1
-- Clarified that Elliot Wave 3 Analysis still requires the Python MT5 bridge until a future EA version pushes M15 data.
+- Documented current V4 EA scope:
+  - Smart System A: H4 and H1
+  - UPAS: MN1, W1, D1, H4, and H1
+  - Wave Structure Analyst: D1, H4, and H1
+  - Elliot Wave 3 Analysis: H4, H1, and M15
 
 ## 2026-06-06
 

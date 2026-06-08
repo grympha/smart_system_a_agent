@@ -288,6 +288,7 @@ The EA can push OHLCV data from MT5 to the hosted app every 5 minutes:
 ```text
 mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5
 mt5/GoldSmartAgent_AutoPushOHLC_EA_V3.mq5
+mt5/GoldSmartAgent_AutoPushOHLC_EA_V4.mq5
 ```
 
 Default interval:
@@ -296,13 +297,14 @@ Default interval:
 InpPushIntervalSeconds = 300
 ```
 
-The V3 EA can push these analysis systems:
+The V4 EA can push these analysis systems:
 
 - Smart System A: H4 and H1
 - UPAS: MN1, W1, D1, H4, and H1
 - Wave Structure Analyst: D1, H4, and H1
+- Elliot Wave 3 Analysis: H4, H1, and M15
 
-Elliot Wave 3 Analysis requires H4, H1, and M15. Use MT5 Direct Mode through the Python bridge for that system unless the EA is upgraded to push `elliot_wave3` with M15 data.
+V3 remains committed as a backup EA for SSA, UPAS, and Wave Structure only. Use V4 when you want all current analysis systems to update from MT5 auto-push.
 
 The EA payload can also include screenshot metadata for future image-AI modules:
 
