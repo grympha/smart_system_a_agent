@@ -689,6 +689,7 @@ PAGE = """
           <option value="csv" {% if form.data_source == "csv" %}selected{% endif %}>CSV Upload</option>
           <option value="live" {% if form.data_source == "live" %}selected{% endif %}>Live XAUUSD Feed</option>
           <option value="mt5" {% if form.data_source == "mt5" %}selected{% endif %}>MT5 Direct Mode</option>
+          <option value="mt5_ea" {% if form.data_source == "mt5_ea" %}selected{% endif %}>MT5 Auto-Push EA</option>
         </select>
         <div class="csv-only">
           <label for="ohlc_data">OHLC Data <span class="field-help" tabindex="0" data-tip="Accepted CSV columns: timeframe,timestamp,open,high,low,close,volume. Smart System A: H4/H1. UPAS: MN1/W1/D1/H4/H1. Wave Structure Analyst: H4/H1, optional D1/M30/M15. Elliot Wave 3 Analysis: H4/H1/M15.">!</span></label>
@@ -1781,6 +1782,17 @@ def run_mt5_bridge_analysis(analysis_system: str) -> dict[str, object]:
     return item
 
 
+def latest_mt5_auto_push_analysis(analysis_system: str) -> dict[str, object]:
+    display_name = display_system_name(analysis_system)
+    item = latest_history("mt5", display_name)
+    if not item:
+        raise ValueError(
+            f"No MT5 Auto-Push EA result found for {display_name}. "
+            "Keep MT5 open with GoldSmartAgent_AutoPushOHLC_EA_V4 attached and wait for the next push cycle."
+        )
+    return item
+
+
 def is_alert_result(item: dict[str, object]) -> bool:
     status = str(item.get("status") or "").upper()
     return status in {"VALID_TRADE", "WAVE_CONFIRMED"}
@@ -1912,7 +1924,12 @@ def index():
                 volume_override=form["volume_override"],
             )
 
-            if form["data_source"] == "mt5":
+            if form["data_source"] == "mt5_ea":
+                selected_system = display_system_name(form["analysis_system"])
+                requested_mt5_system = selected_system
+                latest_mt5_results = [latest_mt5_auto_push_analysis(form["analysis_system"])]
+                mt5_waiting = True
+            elif form["data_source"] == "mt5":
                 selected_system = display_system_name(form["analysis_system"])
                 requested_mt5_system = selected_system
                 if mt5_bridge_configured():

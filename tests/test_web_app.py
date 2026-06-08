@@ -29,6 +29,7 @@ def test_home_page_loads() -> None:
     assert b"Wave CSV Template" in response.data
     assert b"Elliot Wave 3 Analysis" in response.data
     assert b"Elliot Wave 3 CSV Template" in response.data
+    assert b"MT5 Auto-Push EA" in response.data
     assert b"Wave Result View" not in response.data
 
 
@@ -231,6 +232,62 @@ def test_mt5_direct_mode_generates_h1_h4_chart_previews_from_ohlcv(monkeypatch) 
     assert b"Latest Chart Preview" in response.data
     assert b"H1 Preview" in response.data
     assert b"H4 Preview" in response.data
+
+
+def test_mt5_auto_push_ea_source_renders_latest_pushed_result(monkeypatch) -> None:
+    monkeypatch.setattr(
+        web_module,
+        "latest_history",
+        lambda source, system_used: {
+            "id": 999,
+            "created_at": "2026-06-08 15:00:49 MYT",
+            "system_used": system_used,
+            "status": "NO_TRADE",
+            "setup_name": "None",
+            "score": "1/5",
+            "summary": "Latest EA-pushed UPAS result.",
+            "source": source,
+            "detail": {
+                "status": "NO_TRADE",
+                "market_bias": {"MN1": "neutral", "W1": "bearish", "D1": "bearish", "H4": "bearish", "H1": "bearish"},
+                "setup": {
+                    "name": "None",
+                    "direction": "NONE",
+                    "confluence_score": 1,
+                    "checklist": {
+                        "support_resistance_proximity": {"passed": True, "reason": "Price is near a zone."}
+                    },
+                },
+                "trade_plan": {},
+                "trade_plan_display": None,
+                "mt5_data_status": {
+                    "provider": "MT5 Auto-Push EA",
+                    "status": "OK",
+                    "total_candles": 600,
+                    "volume_data": "Available",
+                }
+            },
+        },
+    )
+
+    client = app.test_client()
+    response = client.post("/", data={"data_source": "mt5_ea", "analysis_system": "upas"})
+
+    assert response.status_code == 200
+    assert b"Latest MT5 Result - UPAS Trade Assistant" in response.data
+    assert b"Latest EA-pushed UPAS result." in response.data
+    assert b"MT5 Data Status" in response.data
+
+
+def test_mt5_auto_push_ea_source_reports_missing_result(monkeypatch) -> None:
+    monkeypatch.setattr(web_module, "latest_history", lambda source, system_used: None)
+
+    client = app.test_client()
+    response = client.post("/", data={"data_source": "mt5_ea", "analysis_system": "wave"})
+
+    assert response.status_code == 200
+    assert b"Input Error" in response.data
+    assert b"No MT5 Auto-Push EA result found for Wave Structure Analyst" in response.data
 
 
 def test_mt5_direct_mode_regenerates_mixed_chart_preview_pair() -> None:
