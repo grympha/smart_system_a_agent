@@ -254,6 +254,33 @@ Important caveat:
 - Quick Cloudflare tunnel URLs change when restarted.
 - A stable named tunnel needs a Cloudflare domain/zone and correct account permissions.
 
+## MT5 Auto-Push EA Notes
+
+Latest committed EA copy:
+
+```text
+mt5/GoldSmartAgent_AutoPushOHLC_EA_V3.mq5
+```
+
+This file is copied from the active MetaTrader workspace EA:
+
+```text
+C:\Users\User\AppData\Roaming\MetaQuotes\Terminal\5FFA568149E88FCD5B44D926DCFEAA79\MQL5\Experts\Advisors\GoldSmartAgent_AutoPushOHLC_EA_V3.mq5
+```
+
+Current V3 behavior:
+
+- Auto-pushes every 5 minutes by default with `InpPushIntervalSeconds = 300`.
+- Pushes on EA start when `InpPushOnStart = true`.
+- Default endpoint is `https://smart-system-a-agent.onrender.com/api/analyze`.
+- Pushes Smart System A with H4 and H1 rows.
+- Pushes UPAS with MN1, W1, D1, H4, and H1 rows.
+- Pushes Wave Structure Analyst with D1, H4, and H1 rows.
+- Includes current chart screenshot metadata and base64 PNG payload.
+- Does not push Elliot Wave 3 Analysis yet because that system needs M15 rows.
+
+Use the Python MT5 bridge for Elliot Wave 3 Analysis, or build a future V4 EA that also pushes `elliot_wave3` with H4, H1, and M15.
+
 ## Render Deployment
 
 Recommended Render settings:
@@ -299,6 +326,7 @@ The exact test count can change as systems are added. A clean local run should p
 
 - Live feed quality depends on Twelve Data response and volume availability.
 - MT5 Direct Mode needs a running local bridge or a working EA push.
+- MT5 Auto-Push EA V3 does not push Elliot Wave 3 Analysis yet.
 - Screenshot analysis is not OCR/AI chart reading yet.
 - SQLite history is simple local persistence. Render filesystem persistence may reset depending on service behavior.
 - Wave Structure Analyst is a conservative rule-based approximation, not a certainty engine.

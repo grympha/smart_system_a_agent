@@ -45,6 +45,7 @@ This file tracks practical next steps for Gold Smart Agent.
 ## MT5 Work
 
 - Package the MT5 bridge startup flow into a simpler Windows guide.
+- Build a future `GoldSmartAgent_AutoPushOHLC_EA_V4.mq5` that can push Elliot Wave 3 Analysis with H4, H1, and M15 rows.
 - Add health-check script for:
   - MT5 open
   - MT5 logged in
