@@ -9,29 +9,36 @@ Current analysis systems:
 - Wave Structure Analyst
 - Elliot Wave 3 Analysis
 
-Hosted app:
+Primary deployment:
+
+```text
+Local Windows PC + Cloudflare Named Tunnel
+```
+
+Optional legacy hosted app:
 
 ```text
 https://smart-system-a-agent.onrender.com/
 ```
 
-## Quick Start From Any Computer
+## Local Quick Start
 
 ```powershell
 git clone https://github.com/grympha/smart_system_a_agent.git
 cd smart_system_a_agent
 git checkout codex/render-deployment
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-mt5-bridge.txt
+copy .env.example .env
 python -m pytest
-python web_app.py
+start_all.bat
 ```
 
 Open:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:5000
 ```
 
 If `git` is not recognized on Windows, install Git for Windows or run it from:
@@ -43,9 +50,11 @@ C:\Program Files\Git\cmd\git.exe
 ## Project Documents
 
 - `PROJECT_CONTEXT.md` explains the architecture, deployment, MT5 bridge, environment variables, and current caveats.
+- `LOCAL_DEPLOYMENT.md` explains local Windows hosting and Cloudflare Named Tunnel setup.
+- `PROJECT_CLEANUP_REPORT.md` records the latest project cleanup and production-readiness review.
 - `CHANGELOG.md` records important feature updates.
 - `TODO.md` lists next improvements and known follow-up work.
-- `DEPLOYMENT.md` contains Render deployment guidance.
+- `DEPLOYMENT.md` contains optional Render deployment guidance.
 
 Read `PROJECT_CONTEXT.md` first when continuing the project from another PC.
 
@@ -228,12 +237,12 @@ Gold Smart Agent can send Telegram alerts when hourly MT5 auto-analysis finds:
 - Wave Structure Analyst `WAVE_CONFIRMED`
 - Elliot Wave 3 Analysis `VALID_TRADE`
 
-Set these environment variables on Render:
+Set these environment variables locally:
 
 ```text
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
-PUBLIC_APP_URL=https://smart-system-a-agent.onrender.com
+PUBLIC_BASE_URL=https://agent.my-domain.com
 ```
 
 Test endpoint:
@@ -274,7 +283,7 @@ Required request header:
 X-API-Key: your_key
 ```
 
-Render cannot call `127.0.0.1` on your PC. To use the bridge from the hosted app, expose it through a secure public URL such as Cloudflare Tunnel, then set:
+For local-first deployment, the Flask app calls the bridge directly through `127.0.0.1`. If you use a cloud host later, expose the bridge through a secure URL and set:
 
 ```text
 MT5_BRIDGE_URL=https://your-public-bridge-url
@@ -283,7 +292,7 @@ MT5_BRIDGE_API_KEY=your_key
 
 ### MT5 Auto-Push EA
 
-The EA can push OHLCV data from MT5 to the hosted app every 5 minutes:
+The EA can push OHLCV data from MT5 to the local app through your public Cloudflare URL every 5 minutes:
 
 ```text
 mt5/GoldSmartAgent_AutoPushOHLC_EA.mq5

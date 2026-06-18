@@ -8,12 +8,14 @@ import urllib.request
 from io import BytesIO
 from io import StringIO
 from io import TextIOWrapper
+import sqlite3
 
 from flask import Flask, Response, jsonify, render_template_string, request
 from PIL import Image, ImageDraw, ImageFont
 
+from app_config import get_config, public_url
 from elliot_wave3 import ElliotWave3Analyzer, ElliotWave3Result
-from history_store import add_history, get_history_item, latest_history, malaysia_now_text, recent_history
+from history_store import DB_PATH, add_history, get_history_item, latest_history, malaysia_now_text, recent_history
 from mt5_requests import consume_next_mt5_request, create_mt5_request
 from screenshot_store import add_chart_screenshot, get_chart_screenshot, latest_chart_screenshot, latest_chart_screenshots, screenshot_bytes
 from smart_system_a.agent import SmartSystemAAgent
@@ -1668,6 +1670,106 @@ def api_ping() -> Response:
     return jsonify({"ok": True, "status": "READY", "service": "Gold Smart Agent"})
 
 
+def build_application_status(include_bridge: bool = True) -> dict[str, object]:
+    config = get_config()
+    database = check_database_status()
+    screenshots = check_screenshot_status()
+    storage = check_storage_status()
+    bridge = check_mt5_bridge_status() if include_bridge else {"ok": None, "status": "not_checked"}
+    ok = bool(database["ok"] and screenshots["ok"] and storage["ok"])
+    if include_bridge and bridge["ok"] is False:
+        ok = False
+    return {
+        "ok": ok,
+        "application": {
+            "ok": True,
+            "service": "Gold Smart Agent",
+            "mode": config.app_mode,
+            "public_base_url": config.public_base_url,
+            "flask_host": config.flask_host,
+            "flask_port": config.flask_port,
+        },
+        "database": database,
+        "storage": storage,
+        "screenshots": screenshots,
+        "mt5_bridge": bridge,
+    }
+
+
+def check_database_status() -> dict[str, object]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("SELECT 1").fetchone()
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'analysis_history'"
+            ).fetchone()
+            history_count = conn.execute("SELECT COUNT(*) FROM analysis_history").fetchone()[0] if exists else 0
+        return {"ok": True, "path": str(DB_PATH), "history_rows": history_count}
+    except Exception as exc:
+        return {"ok": False, "path": str(DB_PATH), "error": str(exc)}
+
+
+def check_screenshot_status() -> dict[str, object]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chart_screenshots'"
+            ).fetchone()
+            count = conn.execute("SELECT COUNT(*) FROM chart_screenshots").fetchone()[0] if exists else 0
+        return {"ok": True, "storage": "sqlite", "screenshots": count}
+    except Exception as exc:
+        return {"ok": False, "storage": "sqlite", "error": str(exc)}
+
+
+def check_storage_status() -> dict[str, object]:
+    root = DB_PATH.parent
+    return {
+        "ok": root.exists() and os.access(root, os.W_OK),
+        "root": str(root),
+        "database_exists": DB_PATH.exists(),
+        "database_size_bytes": DB_PATH.stat().st_size if DB_PATH.exists() else 0,
+    }
+
+
+def check_mt5_bridge_status() -> dict[str, object]:
+    config = get_config()
+    if not mt5_bridge_configured():
+        return {
+            "ok": False,
+            "status": "not_configured",
+            "url": config.mt5_bridge_url,
+            "message": "Set MT5_BRIDGE_API_KEY and MT5_BRIDGE_URL, or use local startup scripts.",
+        }
+    try:
+        payload = fetch_mt5_bridge_json(f"{config.mt5_bridge_url}/api/mt5/status", config.mt5_bridge_api_key)
+    except ValueError as exc:
+        return {"ok": False, "status": "unreachable", "url": config.mt5_bridge_url, "error": str(exc)}
+    return {
+        "ok": bool(payload.get("ok")),
+        "status": "connected" if payload.get("connected") else "disconnected",
+        "url": config.mt5_bridge_url,
+        "connected": payload.get("connected"),
+        "logged_in": payload.get("logged_in"),
+        "broker": payload.get("broker"),
+        "server": payload.get("server"),
+        "symbol": payload.get("symbol"),
+        "symbol_available": payload.get("symbol_available"),
+        "read_only": payload.get("read_only"),
+    }
+
+
+@app.get("/health")
+def health() -> Response:
+    status = build_application_status(include_bridge=False)
+    return jsonify({"ok": status["application"]["ok"], "status": "READY" if status["application"]["ok"] else "ERROR"})
+
+
+@app.get("/api/status")
+def api_status() -> Response:
+    status = build_application_status(include_bridge=True)
+    return jsonify(status), 200 if status["ok"] else 503
+
+
 @app.post("/api/notifications/telegram/test")
 def api_telegram_test() -> Response:
     if not telegram_configured():
@@ -1871,8 +1973,7 @@ def format_telegram_alert(alert: dict[str, object]) -> str:
     ]
     history_url = alert.get("history_url")
     if history_url:
-        base_url = os.getenv("PUBLIC_APP_URL", "https://smart-system-a-agent.onrender.com").rstrip("/")
-        lines.extend(["", f"Open result: {base_url}{history_url}"])
+        lines.extend(["", f"Open result: {public_url(str(history_url))}"])
     return "\n".join(str(line) for line in lines)
 
 
@@ -3332,12 +3433,14 @@ def build_mt5_data_status(datasets: list[object]) -> dict[str, object]:
 
 
 def mt5_bridge_configured() -> bool:
-    return bool(os.getenv("MT5_BRIDGE_URL") and os.getenv("MT5_BRIDGE_API_KEY"))
+    config = get_config()
+    return bool(config.mt5_bridge_url and config.mt5_bridge_api_key)
 
 
 def fetch_mt5_bridge_data(timeframes: list[str], limit: int = 300) -> dict[str, object]:
-    base_url = (os.getenv("MT5_BRIDGE_URL") or "").rstrip("/")
-    api_key = os.getenv("MT5_BRIDGE_API_KEY") or ""
+    config = get_config()
+    base_url = config.mt5_bridge_url
+    api_key = config.mt5_bridge_api_key
     if not base_url or not api_key:
         raise ValueError("MT5 Bridge is not configured. Set MT5_BRIDGE_URL and MT5_BRIDGE_API_KEY.")
 
@@ -3391,8 +3494,9 @@ def derive_m15_from_h1(h1_data: OHLCVData) -> OHLCVData:
 
 
 def fetch_mt5_bridge_snapshot() -> dict[str, object]:
-    base_url = (os.getenv("MT5_BRIDGE_URL") or "").rstrip("/")
-    api_key = os.getenv("MT5_BRIDGE_API_KEY") or ""
+    config = get_config()
+    base_url = config.mt5_bridge_url
+    api_key = config.mt5_bridge_api_key
     if not base_url or not api_key:
         return {}
     try:
@@ -3429,4 +3533,5 @@ def extract_page_styles() -> str:
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000, debug=False)
+    config = get_config()
+    app.run(host=config.flask_host, port=config.flask_port, debug=False)

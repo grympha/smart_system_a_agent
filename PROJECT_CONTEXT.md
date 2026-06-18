@@ -22,7 +22,13 @@ Main working branch:
 codex/render-deployment
 ```
 
-Hosted Render URL:
+Primary runtime:
+
+```text
+Local Windows PC + Cloudflare Named Tunnel
+```
+
+Optional Render URL:
 
 ```text
 https://smart-system-a-agent.onrender.com/
@@ -40,6 +46,7 @@ The app must not execute trades.
 
 Core files:
 
+- `app_config.py` - local-first environment configuration and public URL helpers.
 - `web_app.py` - Flask web app, routes, analysis orchestration, MT5 endpoints.
 - `templates.py` - HTML/CSS dashboard templates.
 - `history_store.py` - SQLite-backed recent analysis history.
@@ -57,6 +64,7 @@ Generated or local-only files:
 - `analysis_history.db`
 - `*.log`
 - `tools/cloudflared.exe`
+- `config/cloudflare/tunnel.yml`
 - packaged MT5 zip/folders
 
 These should normally stay uncommitted.
@@ -201,12 +209,15 @@ Telegram notifications are also supported. When `TELEGRAM_BOT_TOKEN` and `TELEGR
 Main web app:
 
 ```text
+APP_MODE=local
+PUBLIC_BASE_URL=https://agent.my-domain.com
+FLASK_HOST=127.0.0.1
+FLASK_PORT=5000
 TWELVE_DATA_API_KEY=your_twelve_data_key
-MT5_BRIDGE_URL=https://your-public-mt5-bridge-url
+MT5_BRIDGE_URL=http://127.0.0.1:5001
 MT5_BRIDGE_API_KEY=your_bridge_key
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
-PUBLIC_APP_URL=https://smart-system-a-agent.onrender.com
 ```
 
 Local MT5 bridge:
@@ -214,7 +225,7 @@ Local MT5 bridge:
 ```text
 MT5_BRIDGE_API_KEY=your_bridge_key
 MT5_BRIDGE_HOST=127.0.0.1
-MT5_BRIDGE_PORT=5055
+MT5_BRIDGE_PORT=5001
 MT5_TERMINAL_PATH=C:\Program Files\MetaTrader 5\terminal64.exe
 MT5_LOGIN=optional_login
 MT5_PASSWORD=optional_password
@@ -241,18 +252,15 @@ Optional helper:
 .\start_mt5_bridge.ps1
 ```
 
-The hosted Render app cannot call your local PC directly. Use a public HTTPS tunnel or a real hosted bridge.
+For public access, expose the local Flask app through a Cloudflare Named Tunnel.
 
-Cloudflare quick tunnel helper:
+Cloudflare tunnel helper:
 
 ```powershell
 .\start_cloudflare_tunnel.ps1
 ```
 
-Important caveat:
-
-- Quick Cloudflare tunnel URLs change when restarted.
-- A stable named tunnel needs a Cloudflare domain/zone and correct account permissions.
+Use a named tunnel and your own hostname for stable daily use.
 
 ## MT5 Auto-Push EA Notes
 
@@ -279,7 +287,7 @@ Current V4 behavior:
 - Auto-pushes every 5 minutes by default with `InpPushIntervalSeconds = 300`.
 - Pushes 300 OHLCV candles per timeframe by default with `InpBarsPerTimeframe = 300`.
 - Pushes on EA start when `InpPushOnStart = true`.
-- Default endpoint is `https://smart-system-a-agent.onrender.com/api/analyze`.
+- Default endpoint is `https://agent.my-domain.com/api/analyze`; set `InpEndpoint` to your Cloudflare hostname.
 - Pushes Smart System A with H4 and H1 rows.
 - Pushes UPAS with MN1, W1, D1, H4, and H1 rows.
 - Pushes Wave Structure Analyst with D1, H4, and H1 rows.
@@ -311,9 +319,9 @@ Do not set `Root Directory` to `render.yaml`. If a root directory is needed, it 
 3. Create and activate Python virtual environment.
 4. Install `requirements.txt`.
 5. Run `python -m pytest`.
-6. Run `python web_app.py`.
-7. Open `http://127.0.0.1:8000`.
-8. For MT5 work, install `requirements-mt5-bridge.txt` and run MT5 desktop first.
+6. Run `start_all.bat`.
+7. Open `http://127.0.0.1:5000`.
+8. For public access, run Cloudflare Named Tunnel.
 
 ## Testing
 

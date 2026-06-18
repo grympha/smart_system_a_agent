@@ -6,6 +6,8 @@ from typing import Any
 
 from flask import Flask, Response, jsonify, request
 
+from app_config import get_config
+
 try:
     from flask_cors import CORS
 except Exception:  # pragma: no cover - fallback for minimal installs
@@ -255,4 +257,5 @@ app = create_bridge_app()
 
 
 if __name__ == "__main__":
-    app.run(host=os.getenv("MT5_BRIDGE_HOST", "127.0.0.1"), port=int(os.getenv("MT5_BRIDGE_PORT", "5055")), debug=False)
+    config = get_config()
+    app.run(host=config.mt5_bridge_host, port=config.mt5_bridge_port, debug=False)

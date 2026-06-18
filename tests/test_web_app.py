@@ -41,6 +41,30 @@ def test_api_ping() -> None:
     assert response.get_json()["status"] == "READY"
 
 
+def test_health_endpoint_reports_ready() -> None:
+    client = app.test_client()
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["status"] == "READY"
+
+
+def test_api_status_reports_components(monkeypatch) -> None:
+    monkeypatch.setattr(web_module, "check_mt5_bridge_status", lambda: {"ok": True, "status": "connected"})
+    client = app.test_client()
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["application"]["mode"] in {"local", "cloud", "render"}
+    assert "database" in payload
+    assert "storage" in payload
+    assert "screenshots" in payload
+    assert payload["mt5_bridge"]["status"] == "connected"
+
+
 def test_telegram_test_endpoint_reports_missing_config(monkeypatch) -> None:
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)

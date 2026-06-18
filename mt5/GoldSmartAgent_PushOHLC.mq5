@@ -4,7 +4,7 @@
 //+------------------------------------------------------------------+
 #property script_show_inputs
 
-input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
+input string InpEndpoint = "https://agent.my-domain.com/api/analyze";
 input string InpAnalysisSystem = "ssa"; // ssa, upas, or wave
 input string InpSymbol = "";            // blank = current chart symbol
 input string InpChartTimeframeLabel = "H1";

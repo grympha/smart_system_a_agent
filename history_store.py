@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import os
 import sqlite3
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from app_config import get_config
 
-DB_PATH = Path(os.getenv("ANALYSIS_HISTORY_DB", "analysis_history.db"))
+
+DB_PATH = get_config().database_path
 MALAYSIA_TZ = ZoneInfo("Asia/Kuala_Lumpur")
 
 

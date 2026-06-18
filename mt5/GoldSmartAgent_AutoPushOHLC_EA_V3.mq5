@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property strict
 
-input string InpEndpoint = "https://smart-system-a-agent.onrender.com/api/analyze";
+input string InpEndpoint = "https://agent.my-domain.com/api/analyze";
 input string InpSymbol = "";            // blank = current chart symbol
 input string InpChartTimeframeLabel = "H1";
 input int    InpBarsPerTimeframe = 300;
@@ -34,6 +34,15 @@ string EscapeJson(string value)
    StringReplace(escaped, CharToString(10), backslash + "n");
    StringReplace(escaped, CharToString(9), backslash + "t");
    return escaped;
+}
+
+string EndpointBaseUrl()
+{
+   string base_url = InpEndpoint;
+   int marker = StringFind(base_url, "/api/");
+   if(marker >= 0)
+      base_url = StringSubstr(base_url, 0, marker);
+   return base_url;
 }
 
 string TimeframeName(ENUM_TIMEFRAMES timeframe)
@@ -267,13 +276,13 @@ bool PushAnalysis(string symbol, string analysis_system)
    Print("Gold Smart Agent: ", analysis_system, " push HTTP status: ", status);
    Print(response);
    if(status == -1)
-      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: https://smart-system-a-agent.onrender.com");
+      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: ", EndpointBaseUrl());
    return (status >= 200 && status < 300);
 }
 
 bool PingServer()
 {
-   string ping_url = "https://smart-system-a-agent.onrender.com/api/ping";
+   string ping_url = EndpointBaseUrl() + "/api/ping";
    char post[];
    char result[];
    string result_headers;
@@ -284,7 +293,7 @@ bool PingServer()
    if(status == -1)
    {
       Print("Gold Smart Agent: ping failed. Error: ", GetLastError());
-      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: https://smart-system-a-agent.onrender.com");
+      Print("Allow this URL in MT5: Tools > Options > Expert Advisors > Allow WebRequest: ", EndpointBaseUrl());
       return false;
    }
 

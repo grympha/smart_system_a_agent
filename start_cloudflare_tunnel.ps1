@@ -1,5 +1,5 @@
 param(
-    [string]$BridgeUrl = "http://127.0.0.1:5055",
+    [string]$BridgeUrl = "http://127.0.0.1:5000",
     [string]$CloudflaredPath = ".\tools\cloudflared.exe",
     [ValidateSet("http2", "quic", "auto")]
     [string]$Protocol = "http2"

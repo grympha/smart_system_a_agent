@@ -4,7 +4,7 @@ param(
 
     [string]$TerminalPath = "C:\Program Files\RoboForex MT5 Terminal\terminal64.exe",
     [string]$HostAddress = "127.0.0.1",
-    [int]$Port = 5055
+    [int]$Port = 5001
 )
 
 $ErrorActionPreference = "Stop"
